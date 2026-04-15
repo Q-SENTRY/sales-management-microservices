@@ -1,0 +1,244 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # DATABASE - MySQL 8.0
+  # ============================================
+  mysql:
+    image: mysql:8.0
+    container_name: sales_management_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password123
+      MYSQL_DATABASE: sales_management_db
+      MYSQL_USER: sales_user
+      MYSQL_PASSWORD: user_password123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - sales_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # MESSAGE BROKER - RabbitMQ (Optional)
+  # ============================================
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: sales_management_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - sales_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # USUARIOS SERVICE - Port 3001
+  # ============================================
+  usuarios-service:
+    build:
+      context: ./usuarios-service
+      dockerfile: Dockerfile
+    container_name: usuarios_service
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=sales_management_db
+      - DB_USER=sales_user
+      - DB_PASSWORD=user_password123
+      - SERVICE_PORT=3001
+      - JWT_SECRET=your_secret_key_change_in_production
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - sales_network
+    restart: unless-stopped
+
+  # ============================================
+  # PRODUCTOS SERVICE - Port 3002
+  # ============================================
+  productos-service:
+    build:
+      context: ./productos-service
+      dockerfile: Dockerfile
+    container_name: productos_service
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=sales_management_db
+      - DB_USER=sales_user
+      - DB_PASSWORD=user_password123
+      - SERVICE_PORT=3002
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - sales_network
+    restart: unless-stopped
+
+  # ============================================
+  # VENTAS SERVICE - Port 3003
+  # ============================================
+  ventas-service:
+    build:
+      context: ./ventas-service
+      dockerfile: Dockerfile
+    container_name: ventas_service
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=sales_management_db
+      - DB_USER=sales_user
+      - DB_PASSWORD=user_password123
+      - SERVICE_PORT=3003
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - sales_network
+    restart: unless-stopped
+
+  # ============================================
+  # INVENTARIO SERVICE - Port 3004
+  # ============================================
+  inventario-service:
+    build:
+      context: ./inventario-service
+      dockerfile: Dockerfile
+    container_name: inventario_service
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=sales_management_db
+      - DB_USER=sales_user
+      - DB_PASSWORD=user_password123
+      - SERVICE_PORT=3004
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - sales_network
+    restart: unless-stopped
+
+  # ============================================
+  # FACTURACIÓN SERVICE - Port 3005
+  # ============================================
+  facturacion-service:
+    build:
+      context: ./facturacion-service
+      dockerfile: Dockerfile
+    container_name: facturacion_service
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=sales_management_db
+      - DB_USER=sales_user
+      - DB_PASSWORD=user_password123
+      - SERVICE_PORT=3005
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - sales_network
+    restart: unless-stopped
+
+  # ============================================
+  # NOTIFICACIONES SERVICE - Port 3006
+  # ============================================
+  notificaciones-service:
+    build:
+      context: ./notificaciones-service
+      dockerfile: Dockerfile
+    container_name: notificaciones_service
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=sales_management_db
+      - DB_USER=sales_user
+      - DB_PASSWORD=user_password123
+      - SERVICE_PORT=3006
+      - RABBITMQ_HOST=rabbitmq
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - sales_network
+    restart: unless-stopped
+
+  # ============================================
+  # FRONTEND REACT - Port 3000
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend-react
+      dockerfile: Dockerfile
+    container_name: sales_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_USUARIOS_SERVICE=http://localhost:3001
+      - REACT_APP_PRODUCTOS_SERVICE=http://localhost:3002
+      - REACT_APP_VENTAS_SERVICE=http://localhost:3003
+    depends_on:
+      - usuarios-service
+      - productos-service
+      - ventas-service
+    networks:
+      - sales_network
+    restart: unless-stopped
+
+networks:
+  sales_network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  rabbitmq_data:
+    driver: local

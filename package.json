@@ -1,0 +1,40 @@
+{
+  "name": "sales-management-microservices",
+  "version": "1.0.0",
+  "description": "Sistema de gestión de ventas basado en arquitectura de microservicios",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && cd frontend-react && npm install && cd ../usuarios-service && npm install && cd ../productos-service && npm install && cd ../ventas-service && npm install && cd ../inventario-service && npm install && cd ../facturacion-service && npm install && cd ../notificaciones-service && npm install",
+    "dev": "docker-compose up",
+    "dev:build": "docker-compose up --build",
+    "down": "docker-compose down",
+    "dev:logs": "docker-compose logs -f",
+    "db:migrate": "docker-compose exec mysql mysql -u root -ppassword123 sales_management_db < database/schema.sql",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "microservices",
+    "sales",
+    "management",
+    "rest-api",
+    "nodejs",
+    "react",
+    "mysql",
+    "express"
+  ],
+  "author": "Development Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "workspaces": [
+    "usuarios-service",
+    "productos-service",
+    "ventas-service",
+    "inventario-service",
+    "facturacion-service",
+    "notificaciones-service",
+    "frontend-react"
+  ]
+}
