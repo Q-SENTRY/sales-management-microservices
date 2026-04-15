@@ -99,7 +99,6 @@ CREATE TABLE productos (
   modelo VARCHAR(100),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
   FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE RESTRICT,
   INDEX idx_nombre (nombre),
   INDEX idx_categoria_id (categoria_id),

@@ -11,6 +11,10 @@ module.exports = {
     name: process.env.DB_NAME || 'sales_management_db',
     connectionLimit: parseInt(process.env.DB_POOL_LIMIT) || 10,
   },
+  jwt: {
+    secret: process.env.JWT_SECRET || 'your_secret_key_change_in_production',
+    expiresIn: process.env.JWT_EXPIRATION || '24h',
+  },
   cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:3000' },
   logging: { level: process.env.LOG_LEVEL || 'info' },
 };

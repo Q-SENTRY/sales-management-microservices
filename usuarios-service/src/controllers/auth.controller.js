@@ -29,6 +29,13 @@ class AuthController {
         data: user
       });
     } catch (error) {
+      // Manejar errores de registro específicamente
+      if (error.message === 'El email ya está registrado') {
+        return res.status(409).json({
+          error: 'El email ya está registrado'
+        });
+      }
+      
       logger.error(`Error en registro: ${error.message}`);
       next(error);
     }
@@ -58,6 +65,13 @@ class AuthController {
         }
       });
     } catch (error) {
+      // Manejar errores de autenticación específicamente
+      if (error.message === 'Usuario o contraseña inválida') {
+        return res.status(401).json({
+          error: 'Usuario o contraseña inválida'
+        });
+      }
+      
       logger.error(`Error en login: ${error.message}`);
       next(error);
     }

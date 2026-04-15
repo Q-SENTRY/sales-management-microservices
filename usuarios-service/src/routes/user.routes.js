@@ -6,6 +6,10 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/user.controller');
+const { authenticateToken } = require('../middleware/auth.middleware');
+
+// Todas las rutas de usuarios requieren autenticación
+router.use(authenticateToken);
 
 // @GET /api/v1/users
 router.get('/', userController.getAllUsers);
