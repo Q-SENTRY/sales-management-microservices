@@ -24,7 +24,21 @@ export default function App() {
     dir: '',
   })
   const [ventaResult, setVentaResult] = useState(null)
+  const [ventaError, setVentaError] = useState(null)
   const [flujoSteps, setFlujoSteps] = useState([])
+  const [procesandoVenta, setProcesandoVenta] = useState(false)
+  const [ordenNumero, setOrdenNumero] = useState(4822)
+
+  const PRODUCTOS_PRECIOS = {
+    'Laptop Pro 15"': 980,
+    'Monitor 27" 4K': 420,
+    'Teclado mecánico': 89,
+    'Mouse inalámbrico': 45,
+    'Auriculares BT': 120,
+    'Webcam HD': 75,
+    'Hub USB-C': 35,
+    'SSD 1TB': 110,
+  }
 
   const handleLogin = (e) => {
     e.preventDefault()
@@ -48,12 +62,17 @@ export default function App() {
     if (failureActive) {
       setFailureActive(false)
       setSystemStatus('operativo')
-      addLog('Notificaciones', 'Servicio recuperado — circuit breaker cerrado', 'ok')
+      addLog('Inventory Service', 'Servicio recuperado — conexión restablecida', 'ok')
+      addLog('Orders Service', 'Circuit breaker cerrado', 'ok')
     } else {
       setFailureActive(true)
       setSystemStatus('fallo')
-      addLog('Notificaciones', 'FALLO: servicio no responde — circuit breaker abierto', 'err')
-      addLog('Ventas', 'Evento en DLQ — reintento en 30s', 'warn')
+      addLog('Inventory Service', 'ERROR: Servicio timeout (504) — No responde', 'err')
+      addLog('Network', 'Connection refused to Inventory Service:3004', 'err')
+      addLog('Orders Service', 'Timeout esperando respuesta de Inventario (10s)', 'err')
+      addLog('Orders Service', 'Ejecutando ROLLBACK de orden #4831', 'warn')
+      addLog('Billing Service', 'Transacción cancelada por fallo en Inventario', 'err')
+      addLog('Notifications Service', 'Circuit breaker abierto — 5 intentos fallidos', 'err')
     }
   }
 
@@ -64,18 +83,86 @@ export default function App() {
   }
 
   const procesarVenta = () => {
+    if (!formData.cliente || !formData.email) {
+      setVentaError('Por favor completa Cliente y Email')
+      return
+    }
+
+    setProcesandoVenta(true)
+    setVentaError(null)
+    setVentaResult(null)
+    const precio = PRODUCTOS_PRECIOS[formData.producto] || 0
+    const total = precio * formData.qty
+
+    // Simular flujo de procesamiento
     const pasos = [
-      { label: 'API Gateway recibe la solicitud', proto: 'HTTPS' },
-      { label: 'Servicio de Ventas crea la orden', proto: 'REST' },
-      { label: 'Consulta de stock al Inventario', proto: 'REST → Inventario' },
-      { label: 'Inventario descuenta stock', proto: 'DB update' },
-      { label: 'Factura generada', proto: 'Ventas DB' },
-      { label: 'Evento publicado en RabbitMQ', proto: 'AMQP' },
-      { label: `Email enviado a ${formData.email || 'cliente@email.com'}`, proto: 'SMTP' },
+      { label: 'API Gateway recibe la solicitud', proto: 'POST /orders', status: 'ok' },
+      { label: 'Orders Service valida la orden', proto: 'REST validar', status: 'ok' },
     ]
-    setFlujoSteps(pasos)
-    setVentaResult(`Venta procesada correctamente para ${formData.cliente || 'Cliente'}`)
-    addLog('Ventas', `Nueva orden creada para ${formData.cliente}`, 'ok')
+
+    if (!failureActive) {
+      // FLUJO EXITOSO
+      pasos.push(
+        { label: 'Consultando inventario...', proto: 'GET /inventory/check', status: 'ok' },
+        { label: 'Reservando stock: ' + formData.qty + ' unidades', proto: 'POST /inventory/reserve', status: 'ok' },
+        { label: 'Generando factura #INV-' + ordenNumero, proto: 'POST /billing/invoice', status: 'ok' },
+        { label: 'Publicando evento OrderCreated', proto: 'AMQP publish', status: 'ok' },
+        { label: 'Enviando email a: ' + formData.email, proto: 'SMTP send', status: 'ok' },
+        { label: '✓ Venta completada con éxito', proto: 'HTTP 201', status: 'ok' }
+      )
+
+      addLog('Orders Service', `Orden #${ordenNumero} creada para ${formData.cliente}`, 'ok')
+      addLog('Inventory Service', `Stock reservado: ${formData.producto} x${formData.qty}`, 'ok')
+      addLog('Billing Service', `Factura generada - Total: $${total.toLocaleString()}`, 'ok')
+      addLog('Notifications Service', `Email enviado a ${formData.email}`, 'ok')
+
+      setVentaResult({
+        success: true,
+        orderId: ordenNumero,
+        cliente: formData.cliente,
+        producto: formData.producto,
+        qty: formData.qty,
+        total: total,
+      })
+      setOrdenNumero(ordenNumero + 1)
+    } else {
+      // FLUJO CON FALLO EN INVENTARIO
+      pasos.push({ label: 'Consultando inventario...', proto: 'GET /inventory/check', status: 'ok' })
+
+      // Simular timeout después de un pequeño delay
+      setTimeout(() => {
+        pasos[2].status = 'err'
+        pasos.push(
+          { label: '❌ TIMEOUT: Inventory Service no responde (504)', proto: 'TIMEOUT 10s', status: 'err' },
+          { label: 'Ejecutando ROLLBACK de transacción', proto: 'ROLLBACK', status: 'warn' },
+          { label: 'Cancelando factura pendiente', proto: 'DELETE /billing', status: 'warn' },
+          { label: '❌ Orden fallida - Sin procesar', proto: 'HTTP 504', status: 'err' }
+        )
+
+        addLog('Inventory Service', 'ERROR: Servicio timeout (504) — No responde', 'err')
+        addLog('Orders Service', `Orden #${ordenNumero} - Esperando respuesta de Inventario (timeout 10s)`, 'err')
+        addLog('Orders Service', `ROLLBACK: Cancelando orden #${ordenNumero}`, 'err')
+        addLog('Billing Service', `Transacción cancelada - Orden #${ordenNumero}`, 'err')
+        addLog('Notifications Service', `FALLO EN PROCESAMIENTO - Orden #${ordenNumero}`, 'err')
+
+        setVentaResult({
+          success: false,
+          orderId: ordenNumero,
+          cliente: formData.cliente,
+          error: 'ERROR: Inventory Service timeout (504)',
+          detalles: 'El servicio de inventario no respondió en tiempo. La transacción fue cancelada (ROLLBACK).',
+        })
+        setVentaError('Error al procesar: Timeout en Inventory Service (504)')
+        setProcesandoVenta(false)
+        setFlujoSteps([...pasos])
+      }, 1500)
+
+      setFlujoSteps([...pasos])
+      return
+    }
+
+    setFlujoSteps([...pasos])
+    setTimeout(() => setProcesandoVenta(false), 1000)
   }
 
   const formatPrice = (price) => `$${price.toLocaleString('es-CO')}`
@@ -333,114 +420,232 @@ export default function App() {
     </div>
   )
 
-  const renderNuevaVenta = () => (
-    <div>
-      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', maxWidth: '580px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#1f2937' }}>Registrar nueva venta</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <div style={{ fontSize: '12px', color: '#666' }}>Cliente</div>
-            <input
-              type="text"
-              value={formData.cliente}
-              onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
-              placeholder="Nombre del cliente"
-              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
-            />
+  const renderNuevaVenta = () => {
+    const precioUnitario = PRODUCTOS_PRECIOS[formData.producto] || 0
+    const totalVenta = precioUnitario * formData.qty
+
+    return (
+      <div>
+        {/* MAIN FORM */}
+        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', maxWidth: '700px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '700', marginBottom: '20px', color: '#1f2937' }}>📋 Crear Nueva Venta</h3>
+
+          {/* CLIENTE Y EMAIL */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937' }}>👤 Cliente *</label>
+              <input
+                type="text"
+                value={formData.cliente}
+                onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
+                placeholder="Ej: Carlos Rodríguez"
+                style={{ padding: '10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937' }}>📧 Email *</label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="carlos@email.com"
+                style={{ padding: '10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937', boxSizing: 'border-box' }}
+              />
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <div style={{ fontSize: '12px', color: '#666' }}>Email</div>
-            <input
-              type="text"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="correo@ejemplo.com"
-              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
-            />
+
+          {/* PRODUCTO Y CANTIDAD */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937' }}>📦 Producto *</label>
+              <select
+                value={formData.producto}
+                onChange={(e) => setFormData({ ...formData, producto: e.target.value })}
+                style={{ padding: '10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937', boxSizing: 'border-box' }}
+              >
+                {Object.keys(PRODUCTOS_PRECIOS).map(prod => (
+                  <option key={prod} value={prod}>{prod}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937' }}>🔢 Cantidad *</label>
+              <input
+                type="number"
+                value={formData.qty}
+                onChange={(e) => setFormData({ ...formData, qty: Math.max(1, parseInt(e.target.value) || 1) })}
+                min="1"
+                max="100"
+                style={{ padding: '10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937', boxSizing: 'border-box' }}
+              />
+            </div>
           </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <div style={{ fontSize: '12px', color: '#666' }}>Producto</div>
-            <select
-              value={formData.producto}
-              onChange={(e) => setFormData({ ...formData, producto: e.target.value })}
-              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
+
+          {/* CÁLCULO DE PRECIOS */}
+          <div style={{ backgroundColor: '#f3f4f6', border: '2px solid #e5e7eb', borderRadius: '8px', padding: '14px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #d1d5db' }}>
+              <span style={{ fontSize: '13px', color: '#666' }}>Precio unitario:</span>
+              <span style={{ fontSize: '13px', fontWeight: '600', color: '#1f2937' }}>${precioUnitario.toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #d1d5db' }}>
+              <span style={{ fontSize: '13px', color: '#666' }}>Cantidad: {formData.qty} × ${precioUnitario.toLocaleString()}</span>
+              <span style={{ fontSize: '13px', color: '#666' }}>${(precioUnitario * formData.qty).toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '15px', fontWeight: '700', color: '#534AB7' }}>💰 Total:</span>
+              <span style={{ fontSize: '18px', fontWeight: '700', color: '#534AB7' }}>${totalVenta.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* MÉTODO DE PAGO Y DIRECCIÓN */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937' }}>💳 Método de pago</label>
+              <select
+                value={formData.pago}
+                onChange={(e) => setFormData({ ...formData, pago: e.target.value })}
+                style={{ padding: '10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937', boxSizing: 'border-box' }}
+              >
+                <option>Tarjeta crédito</option>
+                <option>Transferencia</option>
+                <option>Efectivo</option>
+                <option>PayPal</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937' }}>📍 Dirección envío</label>
+              <input
+                type="text"
+                value={formData.dir}
+                onChange={(e) => setFormData({ ...formData, dir: e.target.value })}
+                placeholder="Calle, ciudad"
+                style={{ padding: '10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937', boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
+
+          {/* ERRORES */}
+          {ventaError && (
+            <div style={{ padding: '12px', backgroundColor: '#FCEBEB', color: '#791F1F', borderRadius: '6px', marginBottom: '14px', fontSize: '13px', border: '1px solid #E24B4A', borderLeft: '4px solid #E24B4A' }}>
+              ⚠️ {ventaError}
+            </div>
+          )}
+
+          {/* BOTONES */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={procesarVenta}
+              disabled={procesandoVenta}
+              style={{
+                padding: '11px 20px',
+                fontSize: '14px',
+                fontWeight: '600',
+                borderRadius: '6px',
+                border: 'none',
+                cursor: procesandoVenta ? 'not-allowed' : 'pointer',
+                backgroundColor: procesandoVenta ? '#9CA3AF' : '#534AB7',
+                color: '#ffffff',
+                opacity: procesandoVenta ? 0.7 : 1,
+              }}
             >
-              <option>Laptop Pro 15"</option>
-              <option>Monitor 27" 4K</option>
-              <option>Teclado mecánico</option>
-              <option>Mouse inalámbrico</option>
-              <option>Auriculares BT</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <div style={{ fontSize: '12px', color: '#666' }}>Cantidad</div>
-            <input
-              type="number"
-              value={formData.qty}
-              onChange={(e) => setFormData({ ...formData, qty: parseInt(e.target.value) || 1 })}
-              min="1"
-              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
-            />
-          </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <div style={{ fontSize: '12px', color: '#666' }}>Método de pago</div>
-            <select
-              value={formData.pago}
-              onChange={(e) => setFormData({ ...formData, pago: e.target.value })}
-              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
+              {procesandoVenta ? '⏳ Procesando...' : '✓ Confirmar Venta'}
+            </button>
+            <button
+              onClick={() => {
+                setFormData({ cliente: '', email: '', producto: 'Laptop Pro 15"', qty: 1, pago: 'Tarjeta crédito', dir: '' })
+                setVentaResult(null)
+                setVentaError(null)
+                setFlujoSteps([])
+              }}
+              style={{ padding: '11px 20px', fontSize: '14px', borderRadius: '6px', border: '1px solid #d1d5db', cursor: 'pointer', backgroundColor: 'transparent', color: '#1f2937', fontWeight: '500' }}
             >
-              <option>Tarjeta crédito</option>
-              <option>Transferencia</option>
-              <option>Efectivo</option>
-              <option>PayPal</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <div style={{ fontSize: '12px', color: '#666' }}>Dirección envío</div>
-            <input
-              type="text"
-              value={formData.dir}
-              onChange={(e) => setFormData({ ...formData, dir: e.target.value })}
-              placeholder="Calle, ciudad"
-              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
-            />
+              🔄 Limpiar
+            </button>
           </div>
         </div>
+
+        {/* RESULTADO DE LA VENTA */}
         {ventaResult && (
-          <div style={{ padding: '10px 14px', backgroundColor: '#E1F5EE', color: '#085041', borderRadius: '6px', marginBottom: '12px', fontSize: '13px' }}>
-            ✓ {ventaResult}
+          <div style={{
+            marginTop: '20px',
+            padding: '20px',
+            backgroundColor: ventaResult.success ? '#E1F5EE' : '#FCEBEB',
+            border: ventaResult.success ? '2px solid #1D9E75' : '2px solid #E24B4A',
+            borderRadius: '8px',
+            maxWidth: '700px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '24px' }}>{ventaResult.success ? '✅' : '❌'}</span>
+              <span style={{ fontSize: '16px', fontWeight: '700', color: ventaResult.success ? '#085041' : '#791F1F' }}>
+                {ventaResult.success ? 'Venta Procesada Correctamente' : 'Error en Procesamiento'}
+              </span>
+            </div>
+            <div style={{ fontSize: '13px', color: ventaResult.success ? '#085041' : '#791F1F', lineHeight: '1.8' }}>
+              <p style={{ margin: '0 0 8px 0' }}>
+                <strong>Orden #:</strong> {ventaResult.orderId}
+              </p>
+              <p style={{ margin: '0 0 8px 0' }}>
+                <strong>Cliente:</strong> {ventaResult.cliente}
+              </p>
+              <p style={{ margin: '0 0 8px 0' }}>
+                <strong>Producto:</strong> {ventaResult.producto}
+              </p>
+              <p style={{ margin: '0 0 8px 0' }}>
+                <strong>Cantidad:</strong> {ventaResult.qty} unidades
+              </p>
+              {ventaResult.success && (
+                <p style={{ margin: '0 0 0 0', fontSize: '15px', fontWeight: '600' }}>
+                  💰 <strong>Total:</strong> ${ventaResult.total.toLocaleString()}
+                </p>
+              )}
+              {ventaResult.error && (
+                <p style={{ margin: '0 0 8px 0', fontWeight: '600', color: '#E24B4A' }}>
+                  {ventaResult.error}
+                </p>
+              )}
+              {ventaResult.detalles && (
+                <p style={{ margin: '8px 0 0 0', fontSize: '12px', padding: '8px', backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: '4px' }}>
+                  {ventaResult.detalles}
+                </p>
+              )}
+            </div>
           </div>
         )}
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button style={{ padding: '7px 14px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', cursor: 'pointer', backgroundColor: '#534AB7', color: '#ffffff', borderColor: '#534AB7' }} onClick={procesarVenta}>
-            Procesar venta
-          </button>
-          <button style={{ padding: '7px 14px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', cursor: 'pointer', backgroundColor: 'transparent', color: '#1f2937' }} onClick={() => setFormData({ cliente: '', email: '', producto: 'Laptop Pro 15"', qty: 1, pago: 'Tarjeta crédito', dir: '' })}>
-            Limpiar
-          </button>
-        </div>
-      </div>
-      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', maxWidth: '580px', marginTop: '16px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>Estado del flujo</h3>
-        <div>
-          {flujoSteps.map((step, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
-              <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#E1F5EE', color: '#085041', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600', flexShrink: 0 }}>
-                {i + 1}
-              </span>
-              <span style={{ flex: 1, fontSize: '13px' }}>{step.label}</span>
-              <span style={{ fontSize: '11px', color: '#999', fontFamily: 'monospace' }}>{step.proto}</span>
-              <span style={{ fontSize: '12px', color: '#1D9E75' }}>OK</span>
+
+        {/* FLUJO DE PROCESAMIENTO */}
+        {flujoSteps.length > 0 && (
+          <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', maxWidth: '700px', marginTop: '20px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '16px', color: '#1f2937' }}>🔄 Flujo de Procesamiento REST</h3>
+            <div>
+              {flujoSteps.map((step, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 0', borderBottom: i === flujoSteps.length - 1 ? 'none' : '1px solid #e5e7eb' }}>
+                  <div style={{
+                    minWidth: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    backgroundColor: step.status === 'ok' ? '#E1F5EE' : step.status === 'err' ? '#FCEBEB' : '#FEF3C7',
+                    color: step.status === 'ok' ? '#085041' : step.status === 'err' ? '#791F1F' : '#92400E',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: '600',
+                    flexShrink: 0,
+                  }}>
+                    {step.status === 'ok' ? '✓' : step.status === 'err' ? '✕' : '⚠'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '600', color: step.status === 'err' ? '#791F1F' : '#1f2937' }}>{step.label}</div>
+                    <div style={{ fontSize: '11px', color: '#999', fontFamily: 'monospace', marginTop: '2px' }}>{step.proto}</div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
-    </div>
-  )
+    )
+  }
 
   const renderMicroservicios = () => (
     <div>
@@ -450,22 +655,73 @@ export default function App() {
           { name: 'Auth Service', port: '3001', status: 'ok', req: 98, lat: '12ms', cpu: 15 },
           { name: 'Products', port: '3002', status: 'ok', req: 204, lat: '34ms', cpu: 48 },
           { name: 'Orders', port: '3003', status: 'ok', req: 189, lat: '21ms', cpu: 31 },
-          { name: 'Inventory', port: '3004', status: 'ok', req: 67, lat: '9ms', cpu: 8 },
+          { name: 'Inventory', port: '3004', status: failureActive ? 'err' : 'ok', req: failureActive ? 0 : 67, lat: failureActive ? '—' : '9ms', cpu: failureActive ? '—' : 8 },
         ].map(svc => (
-          <div key={svc.name} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', backgroundColor: '#ffffff', padding: '14px' }}>
+          <div key={svc.name} style={{
+            border: svc.status === 'err' ? '2px solid #E24B4A' : '1px solid #e5e7eb',
+            borderRadius: '8px',
+            backgroundColor: svc.status === 'err' ? '#FCEBEB' : '#ffffff',
+            padding: '14px'
+          }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <h4 style={{ fontSize: '14px', fontWeight: '600' }}>{svc.name}</h4>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
+              <h4 style={{ fontSize: '14px', fontWeight: '600', color: svc.status === 'err' ? '#E24B4A' : '#1f2937' }}>{svc.name}</h4>
+              <span style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: svc.status === 'ok' ? '#10b981' : '#E24B4A',
+                boxShadow: svc.status === 'err' ? '0 0 8px #E24B4A' : 'none'
+              }}></span>
             </div>
-            <div style={{ fontSize: '12px', color: '#666', lineHeight: '1.6' }}>
-              {svc.req} req/min · latencia {svc.lat}<br />CPU: {svc.cpu}%
+            <div style={{ fontSize: '12px', color: svc.status === 'err' ? '#E24B4A' : '#666', lineHeight: '1.6' }}>
+              {svc.status === 'err' ? (
+                <>
+                  <strong style={{ display: 'block', marginBottom: '4px' }}>❌ SERVICIO CAÍDO</strong>
+                  Timeout: 504<br />
+                  Latencia: —<br />
+                  <span style={{ fontSize: '10px', padding: '4px 8px', backgroundColor: '#E24B4A', color: '#fff', borderRadius: '3px', display: 'inline-block', marginTop: '4px' }}>CRÍTICO</span>
+                </>
+              ) : (
+                <>
+                  {svc.req} req/min · latencia {svc.lat}<br />CPU: {svc.cpu}%
+                </>
+              )}
             </div>
-            <div style={{ height: '4px', backgroundColor: '#f0f0f0', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', backgroundColor: svc.cpu > 70 ? '#E24B4A' : svc.cpu > 50 ? '#BA7517' : '#1D9E75', width: `${svc.cpu}%` }}></div>
-            </div>
+            {svc.status === 'ok' && (
+              <div style={{ height: '4px', backgroundColor: '#f0f0f0', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', backgroundColor: svc.cpu > 70 ? '#E24B4A' : svc.cpu > 50 ? '#BA7517' : '#1D9E75', width: `${svc.cpu}%` }}></div>
+              </div>
+            )}
           </div>
         ))}
       </div>
+
+      {/* ALERTA SI HAY FALLO */}
+      {failureActive && (
+        <div style={{ backgroundColor: '#FCEBEB', border: '2px solid #E24B4A', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '24px' }}>🚨</span>
+            <div>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#791F1F' }}>FALLO CRÍTICO EN INVENTARIO</div>
+              <div style={{ fontSize: '12px', color: '#E24B4A' }}>El servicio no responde (timeout 504)</div>
+            </div>
+          </div>
+          <div style={{ fontSize: '13px', color: '#791F1F', lineHeight: '1.6', padding: '12px', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #E24B4A' }}>
+            <p style={{ margin: '0 0 8px 0' }}>
+              <strong>¿Qué pasó?</strong><br/>
+              El servicio de Inventario tardó más de 10 segundos en responder.
+            </p>
+            <p style={{ margin: '0 0 8px 0' }}>
+              <strong>Consecuencia:</strong><br/>
+              Todas las órdenes que consulten inventario fallarán. Se ejecuta ROLLBACK automático.
+            </p>
+            <p style={{ margin: '0' }}>
+              <strong>Protocolo REST afectado:</strong><br/>
+              GET /inventory/check (504 Service Unavailable)
+            </p>
+          </div>
+        </div>
+      )}
 
       <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
         <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>Arquitectura del Sistema</h3>
