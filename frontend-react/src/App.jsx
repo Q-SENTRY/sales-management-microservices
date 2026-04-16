@@ -1,21 +1,10 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
-import './styles.css'
-
-const API_BASE_URL = 'http://localhost'
-const COP_RATE = 4000
+import React, { useState } from 'react'
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard')
-  const [products, setProducts] = useState([])
-  const [users, setUsers] = useState([])
-  const [orders, setOrders] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [user, setUser] = useState(null)
   const [loginData, setLoginData] = useState({ email: '', password: '' })
-  const [loginLoading, setLoginLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [systemStatus, setSystemStatus] = useState('operativo')
   const [failureActive, setFailureActive] = useState(false)
@@ -37,86 +26,22 @@ export default function App() {
   const [ventaResult, setVentaResult] = useState(null)
   const [flujoSteps, setFlujoSteps] = useState([])
 
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    const savedUser = localStorage.getItem('user')
-    if (token && savedUser) {
-      setIsAuthenticated(true)
-      setUser(JSON.parse(savedUser))
-      loadData()
-    } else {
-      setLoading(false)
-    }
-  }, [])
-
-  const loadData = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const token = localStorage.getItem('token')
-      const headers = token ? { Authorization: `Bearer ${token}` } : {}
-
-      const [productsRes, usersRes, ordersRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}:3002/api/v1/products`, { headers }),
-        axios.get(`${API_BASE_URL}:3001/api/v1/users`, { headers }),
-        axios.get(`${API_BASE_URL}:3003/api/v1/orders`, { headers })
-      ])
-
-      setProducts(productsRes.data.data || [])
-      setUsers(usersRes.data.data || [])
-      setOrders(ordersRes.data.data || [])
-    } catch (err) {
-      if (err.response?.status === 401) {
-        handleLogout()
-      } else {
-        setError('Error al cargar datos')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleLogin = async (e) => {
+  const handleLogin = (e) => {
     e.preventDefault()
-    setLoginLoading(true)
-    setLoginError('')
-
-    try {
-      const response = await axios.post(`${API_BASE_URL}:3001/api/v1/auth/login`, loginData)
-      const { token, user } = response.data.data
-
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(user))
-
+    if (loginData.email === 'demo@example.com' && loginData.password === 'demo123') {
       setIsAuthenticated(true)
-      setUser(user)
+      setUser({ name: 'Ana Martínez' })
       setLoginData({ email: '', password: '' })
-      loadData()
-    } catch (err) {
-      setLoginError(err.response?.data?.message || 'Error al iniciar sesión')
-    } finally {
-      setLoginLoading(false)
+      setLoginError('')
+    } else {
+      setLoginError('Credenciales incorrectas')
     }
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
     setIsAuthenticated(false)
     setUser(null)
-    setProducts([])
-    setUsers([])
-    setOrders([])
     setCurrentPage('dashboard')
-  }
-
-  const formatPrice = (price) => {
-    const cop = price * COP_RATE
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      maximumFractionDigits: 0
-    }).format(cop)
   }
 
   const simulateFail = () => {
@@ -153,41 +78,43 @@ export default function App() {
     addLog('Ventas', `Nueva orden creada para ${formData.cliente}`, 'ok')
   }
 
+  const formatPrice = (price) => `$${price.toLocaleString('es-CO')}`
+
   const renderLogin = () => (
-    <div style={styles.loginContainer}>
-      <div style={styles.loginCard}>
-        <h1 style={styles.loginTitle}>Gestión de Ventas</h1>
-        <p style={styles.loginSubtitle}>Sistema de Microservicios</p>
-        <form onSubmit={handleLogin} style={styles.loginForm}>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Email:</label>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#f9fafb', padding: '20px' }}>
+      <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '40px', maxWidth: '400px', width: '100%', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: '700', textAlign: 'center', color: '#534AB7', margin: '0 0 8px 0' }}>Gestión de Ventas</h1>
+        <p style={{ fontSize: '14px', color: '#999', textAlign: 'center', margin: '0 0 24px 0' }}>Sistema de Microservicios</p>
+        <form onSubmit={handleLogin} style={{ marginBottom: '20px' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#1f2937' }}>Email:</label>
             <input
               type="email"
               value={loginData.email}
               onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
               required
               placeholder="demo@example.com"
-              style={styles.input}
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box' }}
             />
           </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Contraseña:</label>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#1f2937' }}>Contraseña:</label>
             <input
               type="password"
               value={loginData.password}
               onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
               required
               placeholder="demo123"
-              style={styles.input}
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box' }}
             />
           </div>
-          {loginError && <div style={styles.errorMessage}>{loginError}</div>}
-          <button type="submit" disabled={loginLoading} style={styles.loginButton}>
-            {loginLoading ? 'Iniciando...' : 'Iniciar Sesión'}
+          {loginError && <div style={{ backgroundColor: '#FCEBEB', color: '#791F1F', padding: '10px 12px', borderRadius: '6px', fontSize: '12px', marginBottom: '12px', borderLeft: '3px solid #E24B4A' }}>{loginError}</div>}
+          <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#534AB7', color: '#ffffff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', marginTop: '8px' }}>
+            Iniciar Sesión
           </button>
         </form>
-        <div style={styles.demoInfo}>
-          <p style={{margin: '8px 0', fontSize: '13px'}}><strong>Demo:</strong> demo@example.com / demo123</p>
+        <div style={{ backgroundColor: '#FAEEDA', padding: '12px', borderRadius: '6px', borderLeft: '3px solid #BA7517' }}>
+          <p style={{ margin: '8px 0', fontSize: '13px' }}><strong>Demo:</strong> demo@example.com / demo123</p>
         </div>
       </div>
     </div>
@@ -195,70 +122,83 @@ export default function App() {
 
   const renderDashboard = () => (
     <div>
-      <div style={styles.metricsGrid}>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Ventas hoy</div>
-          <div style={styles.metricValue}>{orders.length}</div>
-          <div style={styles.metricDelta}>+12% vs ayer</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Ventas hoy</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>48</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>+12% vs ayer</div>
         </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Ingresos</div>
-          <div style={styles.metricValue}>${(orders.reduce((sum, o) => sum + (o.total || 0), 0) * COP_RATE | 0).toLocaleString('es-CO')}</div>
-          <div style={styles.metricDelta}>+8% vs ayer</div>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Ingresos</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>$3,840</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>+8% vs ayer</div>
         </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Alertas activas</div>
-          <div style={styles.metricValue}>2</div>
-          <div style={styles.metricDelta}>Inventario bajo</div>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Alertas activas</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>2</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>Inventario bajo</div>
         </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Uptime servicios</div>
-          <div style={styles.metricValue}>99.8%</div>
-          <div style={styles.metricDelta}>Todos OK</div>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Uptime servicios</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>99.8%</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>Todos OK</div>
         </div>
       </div>
 
-      <div style={styles.twoCol}>
-        <div style={styles.card}>
-          <h3 style={styles.sectionTitle}>Ventas por hora (hoy)</h3>
-          <div style={styles.chartBars}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>Ventas por hora (hoy)</h3>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '120px', padding: '0 4px' }}>
             {[4, 7, 12, 9, 6, 8, 11, 13, 5].map((val, i) => (
-              <div key={i} style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px'}}>
-                <div style={{width: '100%', height: '80px', backgroundColor: '#f0f0f0', borderRadius: '3px 3px 0 0', position: 'relative', overflow: 'hidden'}}>
-                  <div style={{height: `${(val / 13) * 100}%`, backgroundColor: '#534AB7', width: '100%', position: 'absolute', bottom: 0}}></div>
+              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                <div style={{ width: '100%', height: '80px', backgroundColor: '#f0f0f0', borderRadius: '3px 3px 0 0', position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ height: `${(val / 13) * 100}%`, backgroundColor: '#534AB7', width: '100%', position: 'absolute', bottom: 0 }}></div>
                 </div>
-                <span style={{fontSize: '10px', color: '#999'}}>{'9am|10am|11am|12pm|1pm|2pm|3pm|4pm|5pm'.split('|')[i]}</span>
+                <span style={{ fontSize: '10px', color: '#999' }}>{['9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm'][i]}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div style={styles.card}>
-          <h3 style={styles.sectionTitle}>Últimas órdenes</h3>
-          {orders.length > 0 ? (
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th>Orden</th>
-                  <th>Cliente</th>
-                  <th>Monto</th>
-                  <th>Estado</th>
+        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>Últimas órdenes</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Orden</th>
+                <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Cliente</th>
+                <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Monto</th>
+                <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { id: '#4821', cliente: 'Carlos R.', monto: '$980', estado: 'ok' },
+                { id: '#4820', cliente: 'María L.', monto: '$420', estado: 'proc' },
+                { id: '#4819', cliente: 'Jorge P.', monto: '$240', estado: 'ok' },
+                { id: '#4818', cliente: 'Ana S.', monto: '$89', estado: 'fail' },
+                { id: '#4817', cliente: 'Luis M.', monto: '$35', estado: 'ok' },
+              ].map(order => (
+                <tr key={order.id}>
+                  <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>{order.id}</td>
+                  <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>{order.cliente}</td>
+                  <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>{order.monto}</td>
+                  <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>
+                    <span style={{
+                      fontSize: '11px',
+                      padding: '2px 9px',
+                      borderRadius: '12px',
+                      display: 'inline-block',
+                      backgroundColor: order.estado === 'ok' ? '#E1F5EE' : order.estado === 'fail' ? '#FCEBEB' : '#EEEDFE',
+                      color: order.estado === 'ok' ? '#085041' : order.estado === 'fail' ? '#791F1F' : '#3C3489',
+                    }}>
+                      {order.estado === 'ok' ? 'Completado' : order.estado === 'fail' ? 'Fallido' : 'Procesando'}
+                    </span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {orders.slice(0, 5).map(order => (
-                  <tr key={order.id}>
-                    <td>#{order.numero_orden}</td>
-                    <td>{order.usuario_nombre}</td>
-                    <td>{formatPrice(order.total)}</td>
-                    <td><span style={styles.statusPill}>{order.estado}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p style={{ color: '#999', textAlign: 'center', padding: '20px' }}>Sin órdenes</p>
-          )}
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -266,102 +206,124 @@ export default function App() {
 
   const renderVentas = () => (
     <div>
-      <div style={styles.metricsGrid}>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Total órdenes</div>
-          <div style={styles.metricValue}>{orders.length}</div>
-          <div style={styles.metricDelta}>Este mes</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Total órdenes</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>284</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>Este mes</div>
         </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Completadas</div>
-          <div style={styles.metricValue}>{orders.filter(o => o.estado === 'completado').length}</div>
-          <div style={styles.metricDelta}>{Math.round((orders.filter(o => o.estado === 'completado').length / (orders.length || 1)) * 100)}%</div>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Completadas</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>271</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>95.4%</div>
         </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Pendientes</div>
-          <div style={styles.metricValue}>{orders.filter(o => o.estado === 'pendiente').length}</div>
-          <div style={styles.metricDelta}>En proceso</div>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Pendientes</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>9</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>En proceso</div>
         </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Fallidas</div>
-          <div style={styles.metricValue}>4</div>
-          <div style={styles.metricDelta}>1.4%</div>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Fallidas</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>4</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>1.4%</div>
         </div>
       </div>
 
-      <div style={styles.card}>
-        <h3 style={styles.sectionTitle}>Historial de ventas</h3>
-        {orders.length > 0 ? (
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th>Orden</th>
-                <th>Cliente</th>
-                <th>Producto</th>
-                <th>Qty</th>
-                <th>Total</th>
-                <th>Estado</th>
-                <th>Fecha</th>
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>Historial de ventas</h3>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Orden</th>
+              <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Cliente</th>
+              <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Producto</th>
+              <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Qty</th>
+              <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Total</th>
+              <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Estado</th>
+              <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Fecha</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { id: '#4821', cli: 'Carlos R.', prod: 'Laptop Pro 15"', qty: 1, total: '$980', estado: 'ok', fecha: '15 abr' },
+              { id: '#4820', cli: 'María L.', prod: 'Monitor 27" 4K', qty: 1, total: '$420', estado: 'proc', fecha: '15 abr' },
+              { id: '#4819', cli: 'Jorge P.', prod: 'Auriculares BT', qty: 2, total: '$240', estado: 'ok', fecha: '15 abr' },
+              { id: '#4818', cli: 'Ana S.', prod: 'Teclado mecánico', qty: 1, total: '$89', estado: 'fail', fecha: '15 abr' },
+              { id: '#4817', cli: 'Luis M.', prod: 'Hub USB-C', qty: 3, total: '$105', estado: 'ok', fecha: '14 abr' },
+            ].map(order => (
+              <tr key={order.id}>
+                <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>{order.id}</td>
+                <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>{order.cli}</td>
+                <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>{order.prod}</td>
+                <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>{order.qty}</td>
+                <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>{order.total}</td>
+                <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>
+                  <span style={{
+                    fontSize: '11px',
+                    padding: '2px 9px',
+                    borderRadius: '12px',
+                    display: 'inline-block',
+                    backgroundColor: order.estado === 'ok' ? '#E1F5EE' : order.estado === 'fail' ? '#FCEBEB' : '#EEEDFE',
+                    color: order.estado === 'ok' ? '#085041' : order.estado === 'fail' ? '#791F1F' : '#3C3489',
+                  }}>
+                    {order.estado === 'ok' ? 'Completado' : order.estado === 'fail' ? 'Fallido' : 'Procesando'}
+                  </span>
+                </td>
+                <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#666', fontSize: '12px' }}>{order.fecha}</td>
               </tr>
-            </thead>
-            <tbody>
-              {orders.map(order => (
-                <tr key={order.id}>
-                  <td>#{order.numero_orden}</td>
-                  <td>{order.usuario_nombre}</td>
-                  <td>{order.items?.[0]?.producto_nombre || 'Producto'}</td>
-                  <td>{order.items?.length || 1}</td>
-                  <td>{formatPrice(order.total)}</td>
-                  <td><span style={styles.statusPill}>{order.estado}</span></td>
-                  <td style={{fontSize: '12px', color: '#999'}}>{new Date(order.created_at).toLocaleDateString('es-CO')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={{ color: '#999', textAlign: 'center', padding: '20px' }}>Sin órdenes</p>
-        )}
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
 
   const renderInventario = () => (
     <div>
-      <div style={styles.metricsGrid}>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Total SKUs</div>
-          <div style={styles.metricValue}>{products.length}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Total SKUs</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>24</div>
         </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Stock bajo</div>
-          <div style={styles.metricValue}>2</div>
-          <div style={styles.metricDelta}>Requiere reposición</div>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Stock bajo</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>2</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>Requiere reposición</div>
         </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Agotados</div>
-          <div style={styles.metricValue}>0</div>
-          <div style={styles.metricDelta}>Sin quiebres</div>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Agotados</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>0</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>Sin quiebres</div>
         </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Rotación</div>
-          <div style={styles.metricValue}>4.2x</div>
-          <div style={styles.metricDelta}>Mensual</div>
+        <div style={{ backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>Rotación</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>4.2x</div>
+          <div style={{ fontSize: '11px', marginTop: '4px', color: '#10b981' }}>Mensual</div>
         </div>
       </div>
 
-      <div style={styles.card}>
-        <h3 style={styles.sectionTitle}>Stock por producto</h3>
-        <div style={styles.invGrid}>
-          {products.map(p => {
-            const stockLevel = Math.random() * 25
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>Stock por producto</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+          {[
+            { name: 'Laptop Pro 15"', stock: 12, cat: 'Electrónica', precio: 980 },
+            { name: 'Monitor 27" 4K', stock: 7, cat: 'Electrónica', precio: 420 },
+            { name: 'Teclado mecánico', stock: 3, cat: 'Periféricos', precio: 89 },
+            { name: 'Mouse inalámbrico', stock: 2, cat: 'Periféricos', precio: 45 },
+            { name: 'Auriculares BT', stock: 18, cat: 'Audio', precio: 120 },
+            { name: 'Webcam HD', stock: 9, cat: 'Electrónica', precio: 75 },
+            { name: 'Hub USB-C', stock: 22, cat: 'Accesorios', precio: 35 },
+            { name: 'SSD 1TB', stock: 5, cat: 'Almacenamiento', precio: 110 },
+          ].map(p => {
+            const stockLevel = p.stock
             const color = stockLevel <= 3 ? '#E24B4A' : stockLevel <= 7 ? '#BA7517' : '#1D9E75'
             return (
-              <div key={p.id} style={styles.invCard}>
-                <div style={{fontSize: '13px', fontWeight: '600', marginBottom: '8px'}}>{p.nombre}</div>
-                <div style={{fontSize: '22px', fontWeight: '700', marginBottom: '4px', color: color}}>{Math.floor(stockLevel)}</div>
-                <div style={{fontSize: '11px', color: '#666', marginBottom: '8px'}}>{p.categoria_nombre} · {formatPrice(p.precio)}</div>
-                <div style={{height: '4px', backgroundColor: '#f0f0f0', borderRadius: '2px', overflow: 'hidden'}}>
-                  <div style={{height: '100%', backgroundColor: color, width: `${Math.min((stockLevel / 25) * 100, 100)}%`}}></div>
+              <div key={p.name} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', backgroundColor: '#ffffff', padding: '12px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '8px' }}>{p.name}</div>
+                <div style={{ fontSize: '22px', fontWeight: '700', marginBottom: '4px', color: color }}>{stockLevel}</div>
+                <div style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>{p.cat} · {formatPrice(p.precio)}</div>
+                <div style={{ height: '4px', backgroundColor: '#f0f0f0', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', backgroundColor: color, width: `${Math.min((stockLevel / 25) * 100, 100)}%` }}></div>
                 </div>
               </div>
             )
@@ -373,97 +335,108 @@ export default function App() {
 
   const renderNuevaVenta = () => (
     <div>
-      <div style={styles.twoCol}>
-        <div style={styles.card}>
-          <h3 style={styles.sectionTitle}>Registrar nueva venta</h3>
-          <div style={{marginBottom: '12px'}}>
-            <label style={styles.formLabel}>Cliente</label>
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', maxWidth: '580px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: '#1f2937' }}>Registrar nueva venta</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <div style={{ fontSize: '12px', color: '#666' }}>Cliente</div>
             <input
               type="text"
               value={formData.cliente}
-              onChange={(e) => setFormData({...formData, cliente: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
               placeholder="Nombre del cliente"
-              style={styles.input}
+              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
             />
           </div>
-          <div style={{marginBottom: '12px'}}>
-            <label style={styles.formLabel}>Email</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <div style={{ fontSize: '12px', color: '#666' }}>Email</div>
             <input
               type="text"
               value={formData.email}
-              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="correo@ejemplo.com"
-              style={styles.input}
+              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
             />
           </div>
-          <div style={{marginBottom: '12px'}}>
-            <label style={styles.formLabel}>Producto</label>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <div style={{ fontSize: '12px', color: '#666' }}>Producto</div>
             <select
               value={formData.producto}
-              onChange={(e) => setFormData({...formData, producto: e.target.value})}
-              style={styles.input}
+              onChange={(e) => setFormData({ ...formData, producto: e.target.value })}
+              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
             >
-              {products.map(p => (
-                <option key={p.id} value={p.nombre}>{p.nombre}</option>
-              ))}
+              <option>Laptop Pro 15"</option>
+              <option>Monitor 27" 4K</option>
+              <option>Teclado mecánico</option>
+              <option>Mouse inalámbrico</option>
+              <option>Auriculares BT</option>
             </select>
           </div>
-          <div style={{marginBottom: '12px'}}>
-            <label style={styles.formLabel}>Cantidad</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <div style={{ fontSize: '12px', color: '#666' }}>Cantidad</div>
             <input
               type="number"
               value={formData.qty}
-              onChange={(e) => setFormData({...formData, qty: parseInt(e.target.value) || 1})}
+              onChange={(e) => setFormData({ ...formData, qty: parseInt(e.target.value) || 1 })}
               min="1"
-              style={styles.input}
+              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
             />
           </div>
-          <div style={{marginBottom: '12px'}}>
-            <label style={styles.formLabel}>Método de pago</label>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <div style={{ fontSize: '12px', color: '#666' }}>Método de pago</div>
             <select
               value={formData.pago}
-              onChange={(e) => setFormData({...formData, pago: e.target.value})}
-              style={styles.input}
+              onChange={(e) => setFormData({ ...formData, pago: e.target.value })}
+              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
             >
               <option>Tarjeta crédito</option>
               <option>Transferencia</option>
               <option>Efectivo</option>
+              <option>PayPal</option>
             </select>
           </div>
-          <div style={{marginBottom: '12px'}}>
-            <label style={styles.formLabel}>Dirección envío</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <div style={{ fontSize: '12px', color: '#666' }}>Dirección envío</div>
             <input
               type="text"
               value={formData.dir}
-              onChange={(e) => setFormData({...formData, dir: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, dir: e.target.value })}
               placeholder="Calle, ciudad"
-              style={styles.input}
+              style={{ padding: '8px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#ffffff', color: '#1f2937' }}
             />
           </div>
-          {ventaResult && (
-            <div style={{padding: '10px', backgroundColor: '#E1F5EE', color: '#085041', borderRadius: '6px', marginBottom: '12px', fontSize: '13px'}}>
-              ✓ {ventaResult}
-            </div>
-          )}
-          <button style={styles.btnPrimary} onClick={procesarVenta}>
+        </div>
+        {ventaResult && (
+          <div style={{ padding: '10px 14px', backgroundColor: '#E1F5EE', color: '#085041', borderRadius: '6px', marginBottom: '12px', fontSize: '13px' }}>
+            ✓ {ventaResult}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button style={{ padding: '7px 14px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', cursor: 'pointer', backgroundColor: '#534AB7', color: '#ffffff', borderColor: '#534AB7' }} onClick={procesarVenta}>
             Procesar venta
           </button>
+          <button style={{ padding: '7px 14px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', cursor: 'pointer', backgroundColor: 'transparent', color: '#1f2937' }} onClick={() => setFormData({ cliente: '', email: '', producto: 'Laptop Pro 15"', qty: 1, pago: 'Tarjeta crédito', dir: '' })}>
+            Limpiar
+          </button>
         </div>
-
-        <div style={styles.card}>
-          <h3 style={styles.sectionTitle}>Estado del flujo</h3>
-          <div>
-            {flujoSteps.map((step, i) => (
-              <div key={i} style={{display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid #f0f0f0'}}>
-                <span style={{width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#E1F5EE', color: '#085041', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600', flexShrink: 0}}>
-                  {i + 1}
-                </span>
-                <span style={{flex: 1, fontSize: '13px'}}>{step.label}</span>
-                <span style={{fontSize: '11px', color: '#999', fontFamily: 'monospace'}}>{step.proto}</span>
-                <span style={{fontSize: '12px', color: '#1D9E75'}}>OK</span>
-              </div>
-            ))}
-          </div>
+      </div>
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', maxWidth: '580px', marginTop: '16px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>Estado del flujo</h3>
+        <div>
+          {flujoSteps.map((step, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
+              <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#E1F5EE', color: '#085041', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600', flexShrink: 0 }}>
+                {i + 1}
+              </span>
+              <span style={{ flex: 1, fontSize: '13px' }}>{step.label}</span>
+              <span style={{ fontSize: '11px', color: '#999', fontFamily: 'monospace' }}>{step.proto}</span>
+              <span style={{ fontSize: '12px', color: '#1D9E75' }}>OK</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -471,117 +444,142 @@ export default function App() {
 
   const renderMicroservicios = () => (
     <div>
-      <div style={styles.svcGrid}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '16px' }}>
         {[
-          { name: 'Usuarios', req: 142, lat: '18ms', cpu: 22 },
-          { name: 'Productos', req: 98, lat: '12ms', cpu: 15 },
-          { name: 'Ventas', req: 204, lat: '34ms', cpu: 48 },
-          { name: 'Inventario', req: 189, lat: '21ms', cpu: 31 },
-          { name: failureActive ? 'Notificaciones (FALLO)' : 'Notificaciones', req: 67, lat: '9ms', cpu: 8 },
-        ].map((svc, i) => (
-          <div key={i} style={{...styles.svcCard, borderColor: failureActive && i === 4 ? '#E24B4A' : '#e5e7eb'}}>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
-              <span style={{fontSize: '13px', fontWeight: '600'}}>{svc.name}</span>
-              <span style={{width: '8px', height: '8px', borderRadius: '50%', backgroundColor: failureActive && i === 4 ? '#E24B4A' : '#1D9E75'}}></span>
+          { name: 'API Gateway', port: '3000', status: 'ok', req: 142, lat: '18ms', cpu: 22 },
+          { name: 'Auth Service', port: '3001', status: 'ok', req: 98, lat: '12ms', cpu: 15 },
+          { name: 'Products', port: '3002', status: 'ok', req: 204, lat: '34ms', cpu: 48 },
+          { name: 'Orders', port: '3003', status: 'ok', req: 189, lat: '21ms', cpu: 31 },
+          { name: 'Inventory', port: '3004', status: 'ok', req: 67, lat: '9ms', cpu: 8 },
+        ].map(svc => (
+          <div key={svc.name} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', backgroundColor: '#ffffff', padding: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <h4 style={{ fontSize: '14px', fontWeight: '600' }}>{svc.name}</h4>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
             </div>
-            <div style={{fontSize: '11px', color: '#666', lineHeight: '1.6'}}>
-              {svc.req} req/min · latencia {svc.lat}<br/>CPU: {svc.cpu}%
+            <div style={{ fontSize: '12px', color: '#666', lineHeight: '1.6' }}>
+              {svc.req} req/min · latencia {svc.lat}<br />CPU: {svc.cpu}%
             </div>
-            <div style={{height: '4px', backgroundColor: '#f0f0f0', borderRadius: '2px', marginTop: '8px', overflow: 'hidden'}}>
-              <div style={{height: '100%', backgroundColor: svc.cpu > 70 ? '#E24B4A' : svc.cpu > 50 ? '#BA7517' : '#1D9E75', width: `${svc.cpu}%`}}></div>
+            <div style={{ height: '4px', backgroundColor: '#f0f0f0', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', backgroundColor: svc.cpu > 70 ? '#E24B4A' : svc.cpu > 50 ? '#BA7517' : '#1D9E75', width: `${svc.cpu}%` }}></div>
             </div>
           </div>
         ))}
       </div>
 
-      <div style={styles.card}>
-        <h3 style={styles.sectionTitle}>Protocolos activos</h3>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th>Origen</th>
-              <th>Destino</th>
-              <th>Protocolo</th>
-              <th>Latencia</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              {from: 'Ventas', to: 'Inventario', proto: 'REST GET', lat: '21ms'},
-              {from: 'Ventas', to: 'RabbitMQ', proto: 'AMQP publish', lat: '4ms'},
-              {from: 'RabbitMQ', to: 'Notificaciones', proto: 'AMQP consume', lat: '6ms'},
-              {from: 'API Gateway', to: 'Usuarios', proto: 'HTTP/2', lat: '18ms'},
-              {from: 'API Gateway', to: 'Productos', proto: 'HTTP/2', lat: '12ms'},
-              {from: 'API Gateway', to: 'Ventas', proto: 'HTTP/2', lat: '34ms'},
-            ].map((p, i) => (
-              <tr key={i}>
-                <td>{p.from}</td>
-                <td>{p.to}</td>
-                <td style={{fontFamily: 'monospace', fontSize: '12px'}}>{p.proto}</td>
-                <td style={{fontFamily: 'monospace', fontSize: '12px'}}>{p.lat}</td>
-                <td><span style={styles.statusPill}>OK</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>Arquitectura del Sistema</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#534AB7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🌐</div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '600' }}>Frontend React</div>
+              <div style={{ fontSize: '12px', color: '#666' }}>Interfaz de usuario moderna con Vite</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>⚙️</div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '600' }}>Microservicios Node.js</div>
+              <div style={{ fontSize: '12px', color: '#666' }}>API REST independientes con Express</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🐰</div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '600' }}>RabbitMQ</div>
+              <div style={{ fontSize: '12px', color: '#666' }}>Mensajería asíncrona entre servicios</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🗄️</div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '600' }}>MySQL</div>
+              <div style={{ fontSize: '12px', color: '#666' }}>Base de datos relacional para persistencia</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
 
   const renderLogs = () => {
-    const filtered = logs.filter(l => logFilter === 'all' || l.type === logFilter)
+    const filteredLogs = logs.filter(log => logFilter === 'all' || log.type === logFilter)
+
     return (
-      <div style={styles.card}>
-        <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px'}}>
-          <h3 style={{...styles.sectionTitle, margin: 0, flex: 1}}>Logs en tiempo real</h3>
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '600', margin: 0, flex: 1, color: '#1f2937' }}>Registro de Eventos</h3>
           <select
             value={logFilter}
             onChange={(e) => setLogFilter(e.target.value)}
-            style={{...styles.input, width: '140px'}}
+            style={{ padding: '7px 14px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: 'transparent', color: '#1f2937', width: '140px' }}
           >
             <option value="all">Todos</option>
             <option value="ok">OK</option>
-            <option value="warn">Warning</option>
-            <option value="err">Error</option>
+            <option value="warn">Advertencias</option>
+            <option value="err">Errores</option>
           </select>
-          <button style={styles.btn} onClick={() => addLog('Sistema', 'Evento simulado del sistema', ['ok', 'warn', 'err'][Math.floor(Math.random() * 3)])}>
-            + Simular evento
-          </button>
         </div>
-        <div>
-          {filtered.slice(0, 20).map((l, i) => (
-            <div key={i} style={{display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '9px 0', borderBottom: '1px solid #f0f0f0', fontSize: '12px'}}>
-              <span style={{color: '#999', minWidth: '54px', fontFamily: 'monospace'}}>{l.t}</span>
-              <span style={{minWidth: '90px', fontWeight: '500', color: l.type === 'ok' ? '#1D9E75' : l.type === 'err' ? '#E24B4A' : '#BA7517'}}>
-                {l.svc}
-              </span>
-              <span style={{color: '#666', flex: 1}}>{l.msg}</span>
-            </div>
-          ))}
+
+        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          {filteredLogs.length > 0 ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Hora</th>
+                  <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Servicio</th>
+                  <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Mensaje</th>
+                  <th style={{ textAlign: 'left', fontSize: '11px', fontWeight: '500', color: '#666', padding: '0 0 8px', borderBottom: '1px solid #e5e7eb' }}>Tipo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLogs.map((log, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#666', fontSize: '12px', fontFamily: 'monospace' }}>{log.t}</td>
+                    <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937', fontWeight: '500' }}>{log.svc}</td>
+                    <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#666' }}>{log.msg}</td>
+                    <td style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb', color: '#1f2937' }}>
+                      <span style={{
+                        fontSize: '11px',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        backgroundColor: log.type === 'ok' ? '#E1F5EE' : log.type === 'warn' ? '#FEF3C7' : '#FCEBEB',
+                        color: log.type === 'ok' ? '#085041' : log.type === 'warn' ? '#92400E' : '#991B1B',
+                      }}>
+                        {log.type === 'ok' ? 'OK' : log.type === 'warn' ? 'WARN' : 'ERR'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ color: '#999', textAlign: 'center', padding: '20px' }}>No hay logs con el filtro seleccionado</p>
+          )}
         </div>
       </div>
     )
   }
 
   const renderNotificaciones = () => (
-    <div style={styles.card}>
-      <h3 style={styles.sectionTitle}>Centro de notificaciones</h3>
-      <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+    <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+      <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>Centro de notificaciones</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {[
-          {color: '#E24B4A', title: 'Circuit breaker activado', desc: 'Servicio de Notificaciones abrió el circuit breaker. 5 fallos consecutivos en SMTP.', time: 'Hace 7 min'},
-          {color: '#BA7517', title: 'Stock bajo: Teclado mecánico', desc: 'Solo quedan 3 unidades. Se recomienda reposición urgente.', time: 'Hace 22 min'},
-          {color: '#BA7517', title: 'Timeout en Inventario', desc: 'Orden #4818 falló por timeout. Se ejecutó retry 3/3 sin éxito.', time: 'Hace 25 min'},
-          {color: '#1D9E75', title: 'Venta completada #4821', desc: 'Laptop Pro 15" — $980.00. Factura generada y email enviado.', time: 'Hace 30 min'},
-          {color: '#1D9E75', title: 'Despliegue exitoso', desc: 'Servicio de Ventas actualizado a v2.4.1 sin interrupciones.', time: 'Hace 2 h'},
+          { color: '#E24B4A', title: 'Circuit breaker activado', desc: 'Servicio de Notificaciones abrió el circuit breaker. 5 fallos consecutivos en SMTP.', time: 'Hace 7 min' },
+          { color: '#BA7517', title: 'Stock bajo: Teclado mecánico', desc: 'Solo quedan 3 unidades. Se recomienda reposición urgente.', time: 'Hace 22 min' },
+          { color: '#BA7517', title: 'Timeout en Inventario', desc: 'Orden #4818 falló por timeout. Se ejecutó retry 3/3 sin éxito.', time: 'Hace 25 min' },
+          { color: '#1D9E75', title: 'Venta completada #4821', desc: 'Laptop Pro 15" — $980.00. Factura generada y email enviado.', time: 'Hace 30 min' },
+          { color: '#1D9E75', title: 'Despliegue exitoso', desc: 'Servicio de Ventas actualizado a v2.4.1 sin interrupciones.', time: 'Hace 2 h' },
         ].map((n, i) => (
-          <div key={i} style={{display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e5e7eb'}}>
-            <div style={{width: '8px', height: '8px', borderRadius: '50%', backgroundColor: n.color, marginTop: '3px', flexShrink: 0}}></div>
-            <div style={{flex: 1}}>
-              <div style={{fontSize: '13px', fontWeight: '600', marginBottom: '2px'}}>{n.title}</div>
-              <div style={{fontSize: '12px', color: '#666'}}>{n.desc}</div>
+          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: n.color, marginTop: '3px', flexShrink: 0 }}></div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '2px' }}>{n.title}</div>
+              <div style={{ fontSize: '12px', color: '#666' }}>{n.desc}</div>
             </div>
-            <div style={{fontSize: '11px', color: '#999', flexShrink: 0}}>{n.time}</div>
+            <div style={{ fontSize: '11px', color: '#999', flexShrink: 0 }}>{n.time}</div>
           </div>
         ))}
       </div>
@@ -623,1176 +621,80 @@ export default function App() {
   ]
 
   return (
-    <div style={styles.app}>
+    <div style={{ display: 'flex', height: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
       {/* SIDEBAR */}
-      <div style={styles.sidebar}>
-        <div style={styles.logo}>
-          <div style={styles.logoTitle}>VentaMS</div>
-          <div style={styles.logoSub}>Sistema de ventas</div>
+      <div style={{ width: '220px', minWidth: '220px', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', padding: '16px 0', backgroundColor: '#ffffff' }}>
+        <div style={{ padding: '0 16px 20px', borderBottom: '1px solid #e5e7eb', marginBottom: '12px' }}>
+          <div style={{ fontSize: '15px', fontWeight: '600', color: '#534AB7' }}>VentaMS</div>
+          <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>Sistema de ventas</div>
         </div>
 
-        <div style={styles.navSection}>Principal</div>
+        <div style={{ fontSize: '11px', color: '#999', padding: '8px 16px 4px', letterSpacing: '0.04em', fontWeight: '500' }}>Principal</div>
         {navItems.map(item => (
           <div
             key={item.id}
-            style={{...styles.navItem, ...(currentPage === item.id ? styles.navItemActive : {})}}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '9px',
+              padding: '8px 16px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              color: currentPage === item.id ? '#534AB7' : '#666',
+              fontWeight: currentPage === item.id ? '500' : 'normal',
+              borderRight: currentPage === item.id ? '2px solid #534AB7' : '2px solid transparent',
+              backgroundColor: currentPage === item.id ? '#f3f4f6' : 'transparent'
+            }}
             onClick={() => setCurrentPage(item.id)}
           >
-            <span style={styles.navIcon}>{item.icon}</span>
+            <span style={{ width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '14px' }}>{item.icon}</span>
             {item.label}
             {item.id === 'notificaciones' && (
-              <span style={{minWidth: '18px', height: '18px', borderRadius: '9px', background: '#E24B4A', color: '#fff', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto'}}>3</span>
+              <span style={{ minWidth: '18px', height: '18px', borderRadius: '9px', background: '#E24B4A', color: '#fff', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' }}>3</span>
             )}
           </div>
         ))}
 
-        <div style={styles.sidebarFooter}>
-          <div style={styles.userRow}>
-            <div style={styles.avatar}>{user?.name?.substring(0, 2).toUpperCase()}</div>
+        <div style={{ marginTop: 'auto', padding: '12px 16px', borderTop: '1px solid #e5e7eb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '30px', height: '30px', borderRadius: '50%', backgroundColor: '#EEEDFE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '600', color: '#3C3489', flexShrink: 0 }}>
+              {user?.name?.substring(0, 2).toUpperCase()}
+            </div>
             <div>
-              <div style={styles.userName}>{user?.name}</div>
-              <div style={styles.userRole}>Admin</div>
+              <div style={{ fontSize: '13px', fontWeight: '500' }}>{user?.name}</div>
+              <div style={{ fontSize: '11px', color: '#999' }}>Admin</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* CONTENT */}
-      <div style={styles.content}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* TOPBAR */}
-        <div style={styles.topbar}>
-          <div style={styles.topbarTitle}>{pageNames[currentPage]}</div>
-          <span style={{...styles.topbarBadge, ...(systemStatus === 'operativo' ? styles.badgeOk : styles.badgeErr)}}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 24px', borderBottom: '1px solid #e5e7eb', backgroundColor: '#ffffff' }}>
+          <div style={{ fontSize: '16px', fontWeight: '600', flex: 1 }}>{pageNames[currentPage]}</div>
+          <span style={{
+            fontSize: '11px',
+            padding: '3px 10px',
+            borderRadius: '20px',
+            backgroundColor: systemStatus === 'operativo' ? '#E1F5EE' : '#FCEBEB',
+            color: systemStatus === 'operativo' ? '#085041' : '#791F1F'
+          }}>
             Sistema {systemStatus}
           </span>
-          <button style={styles.btn} onClick={simulateFail}>
+          <button style={{ padding: '7px 14px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', cursor: 'pointer', backgroundColor: 'transparent', color: '#1f2937' }} onClick={simulateFail}>
             {failureActive ? '✓ Fallo activo' : 'Simular fallo'}
           </button>
-          <button style={styles.btn} onClick={handleLogout}>
+          <button style={{ padding: '7px 14px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', cursor: 'pointer', backgroundColor: 'transparent', color: '#1f2937' }} onClick={handleLogout}>
             Cerrar Sesión
           </button>
         </div>
 
         {/* PAGE CONTENT */}
-        <div style={styles.pageContent}>
-          {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-              Cargando datos...
-            </div>
-          ) : (
-            pages[currentPage]()
-          )}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+          {pages[currentPage] ? pages[currentPage]() : <div>Página no encontrada</div>}
         </div>
       </div>
     </div>
   )
-}
-
-const styles = {
-  app: {
-    display: 'flex',
-    height: '100vh',
-    minHeight: '700px',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    color: '#1f2937',
-  },
-  sidebar: {
-    width: '220px',
-    minWidth: '220px',
-    borderRight: '1px solid #e5e7eb',
-    display: 'flex',
-    flexDirection: 'column',
-    padding: '16px 0',
-    backgroundColor: '#ffffff',
-  },
-  logo: {
-    padding: '0 16px 20px',
-    borderBottom: '1px solid #e5e7eb',
-    marginBottom: '12px',
-  },
-  logoTitle: {
-    fontSize: '15px',
-    fontWeight: '600',
-    color: '#534AB7',
-  },
-  logoSub: {
-    fontSize: '11px',
-    color: '#999',
-    marginTop: '2px',
-  },
-  navSection: {
-    fontSize: '11px',
-    color: '#999',
-    padding: '8px 16px 4px',
-    letterSpacing: '0.04em',
-    fontWeight: '500',
-  },
-  navItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '9px',
-    padding: '8px 16px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    color: '#666',
-    transition: 'all 0.15s',
-    borderRight: '2px solid transparent',
-  },
-  navItemActive: {
-    backgroundColor: '#f3f4f6',
-    color: '#534AB7',
-    fontWeight: '500',
-    borderRight: '2px solid #534AB7',
-  },
-  navIcon: {
-    width: '16px',
-    height: '16px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    fontSize: '14px',
-  },
-  sidebarFooter: {
-    marginTop: 'auto',
-    padding: '12px 16px',
-    borderTop: '1px solid #e5e7eb',
-  },
-  userRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  avatar: {
-    width: '30px',
-    height: '30px',
-    borderRadius: '50%',
-    backgroundColor: '#EEEDFE',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '11px',
-    fontWeight: '600',
-    color: '#3C3489',
-    flexShrink: 0,
-  },
-  userName: {
-    fontSize: '13px',
-    fontWeight: '500',
-  },
-  userRole: {
-    fontSize: '11px',
-    color: '#999',
-  },
-  content: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  topbar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '14px 24px',
-    borderBottom: '1px solid #e5e7eb',
-    backgroundColor: '#ffffff',
-  },
-  topbarTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    flex: 1,
-  },
-  topbarBadge: {
-    fontSize: '11px',
-    padding: '3px 10px',
-    borderRadius: '20px',
-  },
-  badgeOk: {
-    backgroundColor: '#E1F5EE',
-    color: '#085041',
-  },
-  badgeErr: {
-    backgroundColor: '#FCEBEB',
-    color: '#791F1F',
-  },
-  btn: {
-    padding: '7px 14px',
-    fontSize: '13px',
-    borderRadius: '6px',
-    border: '1px solid #d1d5db',
-    cursor: 'pointer',
-    backgroundColor: 'transparent',
-    color: '#1f2937',
-    transition: 'all 0.15s',
-  },
-  btnPrimary: {
-    width: '100%',
-    padding: '10px',
-    backgroundColor: '#534AB7',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
-  },
-  pageContent: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '20px 24px',
-  },
-  metricsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: '12px',
-    marginBottom: '20px',
-  },
-  metric: {
-    backgroundColor: '#f9fafb',
-    borderRadius: '8px',
-    border: '1px solid #e5e7eb',
-    padding: '16px',
-  },
-  metricLabel: {
-    fontSize: '12px',
-    color: '#666',
-    marginBottom: '8px',
-  },
-  metricValue: {
-    fontSize: '24px',
-    fontWeight: '700',
-    color: '#1f2937',
-  },
-  metricDelta: {
-    fontSize: '11px',
-    marginTop: '4px',
-    color: '#10b981',
-  },
-  twoCol: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '16px',
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    padding: '16px',
-  },
-  sectionTitle: {
-    fontSize: '14px',
-    fontWeight: '600',
-    marginBottom: '12px',
-    color: '#1f2937',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '13px',
-  },
-  statusPill: {
-    fontSize: '11px',
-    padding: '2px 9px',
-    borderRadius: '12px',
-    display: 'inline-block',
-    backgroundColor: '#E1F5EE',
-    color: '#085041',
-  },
-  loginContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    backgroundColor: '#f9fafb',
-    padding: '20px',
-  },
-  loginCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '12px',
-    padding: '40px',
-    maxWidth: '400px',
-    width: '100%',
-    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-  },
-  loginTitle: {
-    fontSize: '28px',
-    fontWeight: '700',
-    textAlign: 'center',
-    color: '#534AB7',
-    margin: '0 0 8px 0',
-  },
-  loginSubtitle: {
-    fontSize: '14px',
-    color: '#999',
-    textAlign: 'center',
-    margin: '0 0 24px 0',
-  },
-  loginForm: {
-    marginBottom: '20px',
-  },
-  formGroup: {
-    marginBottom: '16px',
-  },
-  formLabel: {
-    display: 'block',
-    marginBottom: '6px',
-    fontSize: '13px',
-    fontWeight: '500',
-    color: '#1f2937',
-  },
-  input: {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    fontSize: '13px',
-    fontFamily: 'inherit',
-    boxSizing: 'border-box',
-  },
-  loginButton: {
-    width: '100%',
-    padding: '10px',
-    backgroundColor: '#534AB7',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    marginTop: '8px',
-  },
-  errorMessage: {
-    backgroundColor: '#FCEBEB',
-    color: '#791F1F',
-    padding: '10px 12px',
-    borderRadius: '6px',
-    fontSize: '12px',
-    marginBottom: '12px',
-    borderLeft: '3px solid #E24B4A',
-  },
-  demoInfo: {
-    backgroundColor: '#FAEEDA',
-    padding: '12px',
-    borderRadius: '6px',
-    borderLeft: '3px solid #BA7517',
-  },
-  svcGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-    gap: '10px',
-    marginBottom: '16px',
-  },
-  svcCard: {
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    backgroundColor: '#ffffff',
-    padding: '14px',
-  },
-  invGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-    gap: '10px',
-  },
-  invCard: {
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    backgroundColor: '#ffffff',
-    padding: '12px',
-  },
-  chartBars: {
-    display: 'flex',
-    alignItems: 'flex-end',
-    gap: '6px',
-    height: '120px',
-    padding: '0 4px',
-  },
-}
-import { useState, useEffect } from 'react'
-import axios from 'axios'
-import './styles.css'
-
-const API_BASE_URL = 'http://localhost'
-const COP_RATE = 4000
-
-export default function App() {
-  const [currentPage, setCurrentPage] = useState('dashboard')
-  const [products, setProducts] = useState([])
-  const [users, setUsers] = useState([])
-  const [orders, setOrders] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [user, setUser] = useState(null)
-  const [loginData, setLoginData] = useState({ email: '', password: '' })
-  const [loginLoading, setLoginLoading] = useState(false)
-  const [loginError, setLoginError] = useState('')
-  const [systemStatus, setSystemStatus] = useState('operativo')
-
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    const savedUser = localStorage.getItem('user')
-    if (token && savedUser) {
-      setIsAuthenticated(true)
-      setUser(JSON.parse(savedUser))
-      loadData()
-    } else {
-      setLoading(false)
-    }
-  }, [])
-
-  const loadData = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const token = localStorage.getItem('token')
-      const headers = token ? { Authorization: `Bearer ${token}` } : {}
-
-      const [productsRes, usersRes, ordersRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}:3002/api/v1/products`, { headers }),
-        axios.get(`${API_BASE_URL}:3001/api/v1/users`, { headers }),
-        axios.get(`${API_BASE_URL}:3003/api/v1/orders`, { headers })
-      ])
-
-      setProducts(productsRes.data.data || [])
-      setUsers(usersRes.data.data || [])
-      setOrders(ordersRes.data.data || [])
-    } catch (err) {
-      if (err.response?.status === 401) {
-        handleLogout()
-      } else {
-        setError('Error al cargar datos de los servicios')
-        console.error('Error loading data:', err)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleLogin = async (e) => {
-    e.preventDefault()
-    setLoginLoading(true)
-    setLoginError('')
-
-    try {
-      const response = await axios.post(`${API_BASE_URL}:3001/api/v1/auth/login`, loginData)
-      const { token, user } = response.data.data
-
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(user))
-
-      setIsAuthenticated(true)
-      setUser(user)
-      setLoginData({ email: '', password: '' })
-      loadData()
-    } catch (err) {
-      setLoginError(err.response?.data?.message || 'Error al iniciar sesión')
-    } finally {
-      setLoginLoading(false)
-    }
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    setIsAuthenticated(false)
-    setUser(null)
-    setProducts([])
-    setUsers([])
-    setOrders([])
-    setCurrentPage('dashboard')
-  }
-
-  const formatPrice = (price) => {
-    const cop = price * COP_RATE
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      maximumFractionDigits: 0
-    }).format(cop)
-  }
-
-  const renderLogin = () => (
-    <div style={styles.loginContainer}>
-      <div style={styles.loginCard}>
-        <h1 style={styles.loginTitle}>Gestión de Ventas</h1>
-        <p style={styles.loginSubtitle}>Sistema de Microservicios</p>
-        <form onSubmit={handleLogin} style={styles.loginForm}>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Email:</label>
-            <input
-              type="email"
-              value={loginData.email}
-              onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-              required
-              placeholder="demo@example.com"
-              style={styles.input}
-            />
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Contraseña:</label>
-            <input
-              type="password"
-              value={loginData.password}
-              onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-              required
-              placeholder="demo123"
-              style={styles.input}
-            />
-          </div>
-          {loginError && <div style={styles.errorMessage}>{loginError}</div>}
-          <button type="submit" disabled={loginLoading} style={styles.loginButton}>
-            {loginLoading ? 'Iniciando...' : 'Iniciar Sesión'}
-          </button>
-        </form>
-        <div style={styles.demoInfo}>
-          <p style={{margin: '8px 0', fontSize: '13px'}}><strong>Demo:</strong> demo@example.com / demo123</p>
-        </div>
-      </div>
-    </div>
-  )
-
-  const renderDashboard = () => (
-    <div>
-      <div style={styles.metricsGrid}>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Ventas hoy</div>
-          <div style={styles.metricValue}>{orders.length}</div>
-          <div style={styles.metricDelta}>+12% vs ayer</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Ingresos</div>
-          <div style={styles.metricValue}>${(orders.reduce((sum, o) => sum + (o.total || 0), 0) * COP_RATE | 0).toLocaleString('es-CO')}</div>
-          <div style={styles.metricDelta}>+8% vs ayer</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Productos</div>
-          <div style={styles.metricValue}>{products.length}</div>
-          <div style={styles.metricDelta}>En inventario</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Usuarios</div>
-          <div style={styles.metricValue}>{users.length}</div>
-          <div style={styles.metricDelta}>Registrados</div>
-        </div>
-      </div>
-
-      <div style={styles.twoCol}>
-        <div style={styles.card}>
-          <h3 style={styles.sectionTitle}>Últimas Órdenes</h3>
-          {orders.length > 0 ? (
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th>Orden</th>
-                  <th>Cliente</th>
-                  <th>Total</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.slice(0, 5).map(order => (
-                  <tr key={order.id}>
-                    <td>#{order.numero_orden}</td>
-                    <td>{order.usuario_nombre}</td>
-                    <td>{formatPrice(order.total)}</td>
-                    <td><span style={styles.statusPill}>{order.estado}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p style={{ color: '#999', textAlign: 'center', padding: '20px' }}>Sin órdenes</p>
-          )}
-        </div>
-
-        <div style={styles.card}>
-          <h3 style={styles.sectionTitle}>Top Productos</h3>
-          {products.length > 0 ? (
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th>Categoría</th>
-                  <th>Precio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.slice(0, 5).map(product => (
-                  <tr key={product.id}>
-                    <td>{product.nombre}</td>
-                    <td>{product.categoria_nombre}</td>
-                    <td>{formatPrice(product.precio)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p style={{ color: '#999', textAlign: 'center', padding: '20px' }}>Sin productos</p>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-
-  const renderProductos = () => (
-    <div>
-      <div style={styles.metricsGrid}>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Total SKUs</div>
-          <div style={styles.metricValue}>{products.length}</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Stock Total</div>
-          <div style={styles.metricValue}>∞</div>
-          <div style={styles.metricDelta}>Disponibles</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Categorías</div>
-          <div style={styles.metricValue}>{new Set(products.map(p => p.categoria_nombre)).size}</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Valor Inventario</div>
-          <div style={styles.metricValue}>${(products.reduce((sum, p) => sum + (p.precio || 0), 0) * COP_RATE | 0).toLocaleString('es-CO')}</div>
-        </div>
-      </div>
-
-      <div style={styles.card}>
-        <h3 style={styles.sectionTitle}>Inventario de Productos</h3>
-        {products.length > 0 ? (
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Categoría</th>
-                <th>Precio</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map(product => (
-                <tr key={product.id}>
-                  <td><strong>{product.nombre}</strong></td>
-                  <td>{product.categoria_nombre}</td>
-                  <td>{formatPrice(product.precio)}</td>
-                  <td><span style={{...styles.statusPill, backgroundColor: product.activo ? '#E1F5EE' : '#FCEBEB', color: product.activo ? '#085041' : '#791F1F'}}>{product.activo ? 'Activo' : 'Inactivo'}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={{ color: '#999', textAlign: 'center', padding: '20px' }}>Sin productos</p>
-        )}
-      </div>
-    </div>
-  )
-
-  const renderUsuarios = () => (
-    <div>
-      <div style={styles.metricsGrid}>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Total Usuarios</div>
-          <div style={styles.metricValue}>{users.length}</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Activos Hoy</div>
-          <div style={styles.metricValue}>{Math.ceil(users.length * 0.8)}</div>
-          <div style={styles.metricDelta}>{Math.round((users.length * 0.8 / users.length) * 100)}%</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Nuevos esta semana</div>
-          <div style={styles.metricValue}>3</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Retención</div>
-          <div style={styles.metricValue}>94%</div>
-          <div style={{...styles.metricDelta, color: '#1D9E75'}}>Excelente</div>
-        </div>
-      </div>
-
-      <div style={styles.card}>
-        <h3 style={styles.sectionTitle}>Lista de Usuarios</h3>
-        {users.length > 0 ? (
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Email</th>
-                <th>Fecha Registro</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(u => (
-                <tr key={u.id}>
-                  <td><strong>{u.name}</strong></td>
-                  <td>{u.email}</td>
-                  <td>{new Date(u.created_at).toLocaleDateString('es-CO')}</td>
-                  <td><span style={styles.statusPill}>Activo</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={{ color: '#999', textAlign: 'center', padding: '20px' }}>Sin usuarios</p>
-        )}
-      </div>
-    </div>
-  )
-
-  const renderOrdenes = () => (
-    <div>
-      <div style={styles.metricsGrid}>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Total órdenes</div>
-          <div style={styles.metricValue}>{orders.length}</div>
-          <div style={styles.metricDelta}>Este período</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Completadas</div>
-          <div style={styles.metricValue}>{orders.filter(o => o.estado === 'completado').length}</div>
-          <div style={styles.metricDelta}>{Math.round((orders.filter(o => o.estado === 'completado').length / (orders.length || 1)) * 100)}%</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Pendientes</div>
-          <div style={styles.metricValue}>{orders.filter(o => o.estado === 'pendiente').length}</div>
-        </div>
-        <div style={styles.metric}>
-          <div style={styles.metricLabel}>Ingresos Totales</div>
-          <div style={styles.metricValue}>${(orders.reduce((sum, o) => sum + (o.total || 0), 0) * COP_RATE | 0).toLocaleString('es-CO')}</div>
-        </div>
-      </div>
-
-      <div style={styles.card}>
-        <h3 style={styles.sectionTitle}>Historial de Órdenes</h3>
-        {orders.length > 0 ? (
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th>Orden</th>
-                <th>Cliente</th>
-                <th>Items</th>
-                <th>Total</th>
-                <th>Estado</th>
-                <th>Fecha</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map(order => (
-                <tr key={order.id}>
-                  <td><strong>#{order.numero_orden}</strong></td>
-                  <td>{order.usuario_nombre}</td>
-                  <td>{order.items?.length || 0}</td>
-                  <td>{formatPrice(order.total)}</td>
-                  <td><span style={styles.statusPill}>{order.estado}</span></td>
-                  <td style={{fontSize: '12px', color: '#999'}}>{new Date(order.created_at).toLocaleDateString('es-CO')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={{ color: '#999', textAlign: 'center', padding: '20px' }}>Sin órdenes registradas</p>
-        )}
-      </div>
-    </div>
-  )
-
-  if (!isAuthenticated) {
-    return renderLogin()
-  }
-
-  const pageNames = {
-    dashboard: 'Dashboard',
-    productos: 'Productos',
-    usuarios: 'Usuarios',
-    ordenes: 'Órdenes',
-  }
-
-  const pages = {
-    dashboard: renderDashboard,
-    productos: renderProductos,
-    usuarios: renderUsuarios,
-    ordenes: renderOrdenes,
-  }
-
-  return (
-    <div style={styles.app}>
-      {/* SIDEBAR */}
-      <div style={styles.sidebar}>
-        <div style={styles.logo}>
-          <div style={styles.logoTitle}>VentaMS</div>
-          <div style={styles.logoSub}>Sistema de ventas</div>
-        </div>
-        
-        <div style={styles.navSection}>Principal</div>
-        {['dashboard', 'productos', 'usuarios', 'ordenes'].map(page => (
-          <div
-            key={page}
-            style={{...styles.navItem, ...(currentPage === page ? styles.navItemActive : {})}}
-            onClick={() => setCurrentPage(page)}
-          >
-            <span style={styles.navIcon}>📊</span>
-            {pageNames[page]}
-          </div>
-        ))}
-
-        <div style={styles.sidebarFooter}>
-          <div style={styles.userRow}>
-            <div style={styles.avatar}>{user?.name?.substring(0, 2).toUpperCase()}</div>
-            <div>
-              <div style={styles.userName}>{user?.name}</div>
-              <div style={styles.userRole}>Admin</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* CONTENT */}
-      <div style={styles.content}>
-        {/* TOPBAR */}
-        <div style={styles.topbar}>
-          <div style={styles.topbarTitle}>{pageNames[currentPage]}</div>
-          <span style={{...styles.topbarBadge, ...(systemStatus === 'operativo' ? styles.badgeOk : styles.badgeErr)}}>
-            Sistema {systemStatus}
-          </span>
-          <button style={styles.btn} onClick={handleLogout}>
-            Cerrar Sesión
-          </button>
-        </div>
-
-        {/* PAGE CONTENT */}
-        <div style={styles.pageContent}>
-          {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
-              Cargando datos...
-            </div>
-          ) : (
-            pages[currentPage]()
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const styles = {
-  app: {
-    display: 'flex',
-    height: '100vh',
-    minHeight: '700px',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    color: '#1f2937',
-  },
-  
-  sidebar: {
-    width: '220px',
-    minWidth: '220px',
-    borderRight: '1px solid #e5e7eb',
-    display: 'flex',
-    flexDirection: 'column',
-    padding: '16px 0',
-    backgroundColor: '#ffffff',
-  },
-  
-  logo: {
-    padding: '0 16px 20px',
-    borderBottom: '1px solid #e5e7eb',
-    marginBottom: '12px',
-  },
-  
-  logoTitle: {
-    fontSize: '15px',
-    fontWeight: '600',
-    color: '#534AB7',
-  },
-  
-  logoSub: {
-    fontSize: '11px',
-    color: '#999',
-    marginTop: '2px',
-  },
-  
-  navSection: {
-    fontSize: '11px',
-    color: '#999',
-    padding: '8px 16px 4px',
-    letterSpacing: '0.04em',
-    fontWeight: '500',
-  },
-  
-  navItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '9px',
-    padding: '8px 16px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    color: '#666',
-    transition: 'all 0.15s',
-    borderRight: '2px solid transparent',
-  },
-  
-  navItemActive: {
-    backgroundColor: '#f3f4f6',
-    color: '#534AB7',
-    fontWeight: '500',
-    borderRight: '2px solid #534AB7',
-  },
-  
-  navIcon: {
-    width: '16px',
-    height: '16px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    fontSize: '14px',
-  },
-  
-  sidebarFooter: {
-    marginTop: 'auto',
-    padding: '12px 16px',
-    borderTop: '1px solid #e5e7eb',
-  },
-  
-  userRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  
-  avatar: {
-    width: '30px',
-    height: '30px',
-    borderRadius: '50%',
-    backgroundColor: '#EEEDFE',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '11px',
-    fontWeight: '600',
-    color: '#3C3489',
-    flexShrink: 0,
-  },
-  
-  userName: {
-    fontSize: '13px',
-    fontWeight: '500',
-  },
-  
-  userRole: {
-    fontSize: '11px',
-    color: '#999',
-  },
-  
-  content: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  
-  topbar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '14px 24px',
-    borderBottom: '1px solid #e5e7eb',
-    backgroundColor: '#ffffff',
-  },
-  
-  topbarTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    flex: 1,
-  },
-  
-  topbarBadge: {
-    fontSize: '11px',
-    padding: '3px 10px',
-    borderRadius: '20px',
-  },
-  
-  badgeOk: {
-    backgroundColor: '#E1F5EE',
-    color: '#085041',
-  },
-  
-  badgeErr: {
-    backgroundColor: '#FCEBEB',
-    color: '#791F1F',
-  },
-  
-  btn: {
-    padding: '7px 14px',
-    fontSize: '13px',
-    borderRadius: '6px',
-    border: '1px solid #d1d5db',
-    cursor: 'pointer',
-    backgroundColor: 'transparent',
-    color: '#1f2937',
-    transition: 'all 0.15s',
-  },
-  
-  pageContent: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '20px 24px',
-  },
-  
-  metricsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: '12px',
-    marginBottom: '20px',
-  },
-  
-  metric: {
-    backgroundColor: '#f9fafb',
-    borderRadius: '8px',
-    border: '1px solid #e5e7eb',
-    padding: '16px',
-  },
-  
-  metricLabel: {
-    fontSize: '12px',
-    color: '#666',
-    marginBottom: '8px',
-  },
-  
-  metricValue: {
-    fontSize: '24px',
-    fontWeight: '700',
-    color: '#1f2937',
-  },
-  
-  metricDelta: {
-    fontSize: '11px',
-    marginTop: '4px',
-    color: '#10b981',
-  },
-  
-  twoCol: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '16px',
-  },
-  
-  card: {
-    backgroundColor: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    padding: '16px',
-  },
-  
-  sectionTitle: {
-    fontSize: '14px',
-    fontWeight: '600',
-    marginBottom: '12px',
-    color: '#1f2937',
-  },
-  
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '13px',
-  },
-  
-  statusPill: {
-    fontSize: '11px',
-    padding: '2px 9px',
-    borderRadius: '12px',
-    display: 'inline-block',
-    backgroundColor: '#E1F5EE',
-    color: '#085041',
-  },
-  
-  loginContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    backgroundColor: '#f9fafb',
-    padding: '20px',
-  },
-  
-  loginCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '12px',
-    padding: '40px',
-    maxWidth: '400px',
-    width: '100%',
-    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-  },
-  
-  loginTitle: {
-    fontSize: '28px',
-    fontWeight: '700',
-    textAlign: 'center',
-    color: '#534AB7',
-    margin: '0 0 8px 0',
-  },
-  
-  loginSubtitle: {
-    fontSize: '14px',
-    color: '#999',
-    textAlign: 'center',
-    margin: '0 0 24px 0',
-  },
-  
-  loginForm: {
-    marginBottom: '20px',
-  },
-  
-  formGroup: {
-    marginBottom: '16px',
-  },
-  
-  formLabel: {
-    display: 'block',
-    marginBottom: '6px',
-    fontSize: '13px',
-    fontWeight: '500',
-    color: '#1f2937',
-  },
-  
-  input: {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    fontSize: '13px',
-    fontFamily: 'inherit',
-    boxSizing: 'border-box',
-  },
-  
-  loginButton: {
-    width: '100%',
-    padding: '10px',
-    backgroundColor: '#534AB7',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    marginTop: '8px',
-  },
-  
-  errorMessage: {
-    backgroundColor: '#FCEBEB',
-    color: '#791F1F',
-    padding: '10px 12px',
-    borderRadius: '6px',
-    fontSize: '12px',
-    marginBottom: '12px',
-    borderLeft: '3px solid #E24B4A',
-  },
-  
-  demoInfo: {
-    backgroundColor: '#FAEEDA',
-    padding: '12px',
-    borderRadius: '6px',
-    borderLeft: '3px solid #BA7517',
-  },
 }
