@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.personal.pulsoglobal" version="1.0.0" xmlns="http://www.w3.org/ns/widgets">
+    <name>Pulso Global</name>
+    <description>Noticias mundiales importantes en tiempo real</description>
+    <content src="index.html" />
+    <icon src="icon.png" />
+    <preference name="AndroidWindowSplashScreenBackground" value="#0b0f17" />
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <allow-navigation href="*" />
+    <preference name="Orientation" value="portrait" />
+    <preference name="BackgroundColor" value="0xff0b0f17" />
+    <plugin name="cordova-plugin-inappbrowser" />
+</widget>
