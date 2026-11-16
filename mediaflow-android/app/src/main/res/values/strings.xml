@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MediaFlow</string>
+    <string name="share_analyze">Analizar con MediaFlow</string>
+    <string name="share_import">Importar en MediaFlow</string>
+</resources>

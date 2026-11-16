@@ -1,0 +1,26 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+}
+
+android {
+    namespace = "com.mediaflow.platform.direct"
+    compileSdk = 35
+    defaultConfig {
+        minSdk = 29
+        consumerProguardFiles("consumer-rules.pro")
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+kotlin {
+    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
+}
+
+dependencies {
+    api(project(":platform_integrations:api"))
+    implementation(libs.coroutines.android)
+}
