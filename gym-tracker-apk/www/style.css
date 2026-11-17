@@ -481,3 +481,16 @@ button:disabled{opacity:.5}
 .conf.media{background:rgba(255,209,102,.15);color:#ffd166}.conf.baja{background:rgba(255,107,107,.15);color:#ff6b6b}
 @media (max-width:360px){.fr{grid-template-columns:28px minmax(0,1fr) 70px}.btnpair .btn{padding:7px 9px}}
 .hello{font-size:clamp(18px,5.3vw,26px)}
+/* Deshacer, edición y pesajes */
+.toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 18px}
+.toast .undo{background:var(--a);color:#0a0a0b;font-weight:800;border-radius:99px;padding:7px 14px;font-size:13px;flex:none}
+:root[data-theme="light"] .toast .undo{color:#fff}
+.item.tap{cursor:pointer}
+.item.tap:active{transform:scale(.98)}
+.whist{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}
+.label.sm{font-size:11px;margin:4px 0 2px}
+.wrow{display:flex;align-items:center;gap:10px;background:var(--card2);border-radius:12px;padding:6px 6px 6px 12px}
+.wrow span{flex:1;color:var(--mu);font-size:13px;text-transform:capitalize}
+.wrow b{font-variant-numeric:tabular-nums}
+.wrow .x{color:var(--mu);font-size:18px;padding:2px 8px}
+.sheet{touch-action:pan-y;will-change:transform}

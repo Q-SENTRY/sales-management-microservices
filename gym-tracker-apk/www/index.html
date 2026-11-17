@@ -195,6 +195,7 @@
         <div class="row-h"><div class="label">Tu peso</div><div class="sub" id="wLast"></div></div>
         <div class="bigline"><span id="wNow">–</span><small> kg</small> <span class="delta" id="wDelta"></span></div>
         <div class="chart" id="wChart"></div>
+        <div class="whist" id="wHist"></div>
         <div class="btnrow"><input class="input" id="wIn" type="number" inputmode="decimal" step="0.1" placeholder="Peso de hoy (kg)"><button class="btn primary" id="wSave" style="flex:none">Registrar</button></div>
         <div class="sub">Pésate en ayunas, a la misma hora, 2 o 3 veces por semana. Importa la tendencia, no un día suelto.</div>
       </div>
@@ -217,7 +218,7 @@
         <div class="btnrow"><button class="btn ghost" id="sumShare">Compartir imagen</button></div>
       </div>
       <div class="card">
-        <div class="row-h"><div class="label">Medidas corporales</div><button class="btn sm primary" id="addMeas">+ Medir</button></div>
+        <div class="row-h"><div class="label">Medidas corporales</div><div class="btnpair"><button class="btn sm ghost" id="measHist">Historial</button><button class="btn sm primary" id="addMeas">+ Medir</button></div></div>
         <div id="measList" class="list"></div>
       </div>
       <div class="card">

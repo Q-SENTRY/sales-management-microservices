@@ -112,9 +112,20 @@ function weekStreak() {
 
 /* ================= Interfaz común ================= */
 let toastT;
-function toast(msg) {
-  const t = $('toast'); t.textContent = msg; t.classList.add('on');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200);
+function toast(msg, undo) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('on'); t.classList.toggle('act', !!undo);
+  if (undo) {
+    const b = document.createElement('button'); b.textContent = 'Deshacer'; b.className = 'undo';
+    b.onclick = () => { undo(); t.classList.remove('on', 'act'); vibrate(15); };
+    t.appendChild(b);
+  }
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on', 'act'), undo ? 4500 : 2200);
+}
+// Borra un elemento de una lista y ofrece deshacer
+function removeWithUndo(arr, idx, msg, after) {
+  const [it] = arr.splice(idx, 1); save(); render(); after && after();
+  toast(msg, () => { arr.splice(Math.min(idx, arr.length), 0, it); save(); render(); after && after(); });
+  return it;
 }
 const vibrate = (ms = 12) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
 const reduceMotionNum = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -144,6 +155,22 @@ function openSheet(html, mount) {
 }
 function closeSheet() { $('sheet').classList.remove('on'); $('sheetBg').classList.remove('on'); }
 $('sheetBg').onclick = closeSheet;
+// Deslizar la hoja hacia abajo para cerrarla
+(() => {
+  const sh = $('sheet'); let y0 = null, dy = 0, t0 = 0;
+  sh.addEventListener('touchstart', (e) => { if (sh.scrollTop > 0 || e.target.closest('input,select,textarea,.compare,.range')) { y0 = null; return; } y0 = e.touches[0].clientY; dy = 0; t0 = Date.now(); }, { passive: true });
+  sh.addEventListener('touchmove', (e) => { if (y0 === null) return; dy = e.touches[0].clientY - y0; if (dy > 0) { sh.style.transition = 'none'; sh.style.transform = `translateY(${dy}px)`; } }, { passive: true });
+  sh.addEventListener('touchend', () => {
+    if (y0 === null) return; sh.style.transition = ''; sh.style.transform = '';
+    if (dy > 110 || (dy > 50 && Date.now() - t0 < 250)) closeSheet();
+    y0 = null;
+  });
+})();
+// Que el teclado no tape el campo que estás escribiendo
+document.addEventListener('focusin', (e) => {
+  if (!e.target.matches('input,textarea,select')) return;
+  setTimeout(() => { try { e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) {} }, 300);
+});
 
 let view = 'hoy';
 function go(v) {
@@ -356,10 +383,11 @@ function renderGym() {
   const tm = $('timerMachine'), prev = tm.value;
   tm.innerHTML = machineOptions(db.timer?.m || prev);
   $('exList').innerHTML = d.ex.length ? d.ex.map(x => `
-    <div class="item"><div class="ic">🏋️</div><div class="t"><b>${esc(x.m)}</b>
+    <div class="item tap" data-exedit="${x.id}"><div class="ic">🏋️</div><div class="t"><b>${esc(x.m)}</b>
     <span>${x.at || ''} · ${x.min} min${x.sets ? ` · ${x.sets}×${x.reps || 0}` : ''}${x.kg ? ` · ${fmt(x.kg, 1)} kg` : ''}</span></div>
     <button class="x" data-del="${x.id}">×</button></div>`).join('') : empty('dumbbell', 'Aún no hay ejercicios este día. Empieza una rutina, usa el cronómetro o toca + Añadir.');
-  $('exList').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { d.ex = d.ex.filter(x => x.id !== b.dataset.del); save(); render(); });
+  $('exList').querySelectorAll('[data-del]').forEach(b => b.onclick = (e) => { e.stopPropagation(); const i = d.ex.findIndex(x => x.id === b.dataset.del); if (i >= 0) removeWithUndo(d.ex, i, 'Ejercicio borrado'); });
+  $('exList').querySelectorAll('[data-exedit]').forEach(b => b.onclick = () => { const x = d.ex.find(y => y.id === b.dataset.exedit); if (x) exSheet(x); });
   const series = d.ex.reduce((a, x) => a + (+x.sets || 0), 0);
   $('exTotals').innerHTML = d.ex.length ? `<div><b>${minOf(d)}</b><span>minutos</span></div><div><b>${series}</b><span>series</span></div><div><b>${fmt(volOf(d))}</b><span>kg volumen</span></div>` : '';
 
@@ -374,16 +402,17 @@ function renderGym() {
   $('topMach').innerHTML = top.length ? top.map(([m, n]) => `<div class="item"><div class="t"><b>${esc(m)}</b><span>${n} ${n === 1 ? 'vez' : 'veces'} · ${mins[m]} min en 30 días</span><div class="bar-h"><i style="width:${n / mx * 100}%"></i></div></div></div>`).join('') : empty('chart', 'Aquí verás las máquinas que más usas.');
 }
 function exSheet(pre = {}) {
-  openSheet(`<h3>Añadir ejercicio</h3>
+  const editing = !!pre.id;
+  openSheet(`<h3>${editing ? 'Editar ejercicio' : 'Añadir ejercicio'}</h3>
     <label class="field"><span>Máquina</span><select class="input" id="exM">${pre.m && !db.machines.includes(pre.m) ? `<option selected>${esc(pre.m)}</option>` : ''}${machineOptions(pre.m)}<option value="__new">+ Otra máquina…</option></select></label>
     <label class="field" id="exNewW" style="display:none"><span>Nombre de la máquina</span><input class="input" id="exNew"></label>
     <div class="grid2 tight">
       <label class="field"><span>Tiempo (min)</span><input class="input" type="number" inputmode="numeric" id="exMin" value="${pre.min || ''}"></label>
       <label class="field"><span>Hora</span><input class="input" type="time" id="exAt" value="${pre.at || nowHM()}"></label>
-      <label class="field"><span>Series</span><input class="input" type="number" inputmode="numeric" id="exSets"></label>
-      <label class="field"><span>Repeticiones</span><input class="input" type="number" inputmode="numeric" id="exReps"></label>
+      <label class="field"><span>Series</span><input class="input" type="number" inputmode="numeric" id="exSets" value="${pre.sets || ''}"></label>
+      <label class="field"><span>Repeticiones</span><input class="input" type="number" inputmode="numeric" id="exReps" value="${pre.reps || ''}"></label>
     </div>
-    <label class="field"><span>Peso (kg)</span><input class="input" type="number" inputmode="decimal" id="exKg"></label>
+    <label class="field"><span>Peso (kg)</span><input class="input" type="number" inputmode="decimal" step="0.5" id="exKg" value="${pre.kg || ''}"></label>
     <div class="btnrow"><button class="btn primary" id="exOk">Guardar</button></div>`, (b) => {
     const sel = b.querySelector('#exM');
     sel.onchange = () => { b.querySelector('#exNewW').style.display = sel.value === '__new' ? '' : 'none'; };
@@ -392,9 +421,10 @@ function exSheet(pre = {}) {
       if (m === '__new') { m = b.querySelector('#exNew').value.trim(); if (!m) return toast('Escribe el nombre de la máquina'); if (!db.machines.includes(m)) db.machines.push(m); }
       const min = Math.max(0, Math.round(+b.querySelector('#exMin').value || 0));
       const d = day(), before = prMap();
-      d.ex.push({ id: uid(), m, min, at: b.querySelector('#exAt').value, sets: Math.max(0, Math.round(+b.querySelector('#exSets').value || 0)), reps: Math.max(0, Math.round(+b.querySelector('#exReps').value || 0)), kg: Math.max(0, parseFloat(String(b.querySelector('#exKg').value).replace(',', '.')) || 0) });
+      if (editing) d.ex = d.ex.filter(y => y.id !== pre.id);
+      d.ex.push({ id: pre.id || uid(), m, min, at: b.querySelector('#exAt').value, sets: Math.max(0, Math.round(+b.querySelector('#exSets').value || 0)), reps: Math.max(0, Math.round(+b.querySelector('#exReps').value || 0)), kg: Math.max(0, parseFloat(String(b.querySelector('#exKg').value).replace(',', '.')) || 0) });
       d.ex.sort((a, c) => (a.at || '').localeCompare(c.at || ''));
-      if (!d.gym) { d.gym = true; toast('Ejercicio guardado y día de gym marcado'); } else toast('Ejercicio guardado');
+      if (!d.gym) { d.gym = true; toast('Ejercicio guardado y día de gym marcado'); } else toast(editing ? 'Ejercicio actualizado' : 'Ejercicio guardado');
       save(); closeSheet(); render(); vibrate(15);
       const news = newPRs(before); if (news.length) { confetti(['#ffd166', '#c6ff3d', '#ffffff']); toast(`🏆 ¡Nuevo récord en ${news[0]}!`); }
       checkBadges();
@@ -440,11 +470,14 @@ function renderNutri() {
   $('nProtTip').textContent = left > 0
     ? `Tu meta: ${fmt(PROT_FACTOR[db.profile.goal], 1)} g por kilo para ${GOAL_TXT[db.profile.goal]}. Te faltan ${left} g: unos ${Math.ceil(left / meals)} g en ${meals === 1 ? 'tu próxima comida' : `cada una de tus próximas ${meals} comidas`}.`
     : '¡Meta de proteína cumplida! 🎯';
-  $('protList').innerHTML = d.prot.length ? d.prot.slice().reverse().map(x => `<div class="item"><div class="ic">${x.shake ? '🥤' : x.photo ? '📷' : '🍗'}</div><div class="t"><b>${esc(x.n)}</b><span>${x.at || ''}${x.kcal ? ' · ' + fmt(x.kcal) + ' kcal' : ''}</span></div><b>${fmt(x.g, x.g % 1 ? 1 : 0)} g</b><button class="x" data-del="${x.id}">×</button></div>`).join('') : '';
-  $('protList').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
-    const x = d.prot.find(y => y.id === b.dataset.del); if (x?.shake) delete d.shakes[x.shake];
-    d.prot = d.prot.filter(y => y.id !== b.dataset.del); save(); render();
+  $('protList').innerHTML = d.prot.length ? d.prot.slice().reverse().map(x => `<div class="item tap" data-fedit="${x.id}"><div class="ic">${x.shake ? '🥤' : x.photo ? '📷' : '🍗'}</div><div class="t"><b>${esc(x.n)}</b><span>${x.at || ''}${x.kcal ? ' · ' + fmt(x.kcal) + ' kcal' : ''}</span></div><b>${fmt(x.g, x.g % 1 ? 1 : 0)} g</b><button class="x" data-del="${x.id}">×</button></div>`).join('') : '';
+  $('protList').querySelectorAll('[data-del]').forEach(b => b.onclick = (e) => {
+    e.stopPropagation();
+    const i = d.prot.findIndex(y => y.id === b.dataset.del); if (i < 0) return;
+    const x = d.prot[i], sh = x.shake, t = sh ? d.shakes[sh] : null; if (sh) delete d.shakes[sh];
+    removeWithUndo(d.prot, i, 'Comida borrada', () => { if (sh && d.prot.includes(x)) d.shakes[sh] = t; });
   });
+  $('protList').querySelectorAll('[data-fedit]').forEach(b => b.onclick = () => { const x = d.prot.find(y => y.id === b.dataset.fedit); if (x && !x.shake) foodSheet(x); });
 
   $('shakePlan').innerHTML = db.plan.length ? db.plan.slice().sort((a, b) => a.time.localeCompare(b.time)).map(s => `
     <div class="item"><div class="ic">🥤</div><div class="t"><b>${esc(s.name)} · ${s.g} g</b>
@@ -517,6 +550,8 @@ function logWeight(kg, k = todayKey()) {
   if (k >= (db.weights[db.weights.length - 1]?.d || '')) db.profile.weight = kg;
   save();
 }
+// el peso del perfil siempre es el último pesaje
+function syncWeight() { const l = db.weights[db.weights.length - 1]; if (l) { db.profile.weight = l.kg; save(); } }
 const daysAgo = (k) => Math.round((fromKey(todayKey()) - fromKey(k)) / 864e5);
 // Tendencia: regresión lineal sobre los pesajes de los últimos 28 días
 function trend() {
@@ -618,6 +653,12 @@ function renderCoach() {
   $('wDelta').textContent = dl === null ? '' : `${dl > 0 ? '▲ +' : dl < 0 ? '▼ ' : ''}${fmt(dl, 1)} kg en 30 d`;
   $('wDelta').className = 'delta ' + (dl > 0 ? 'up' : dl < 0 ? 'down' : '');
   $('wChart').innerHTML = weightChart();
+  const recentW = db.weights.slice(-6).reverse();
+  $('wHist').innerHTML = recentW.length ? `<div class="label sm">Últimos pesajes</div>` + recentW.map(w => `<div class="wrow"><span>${fromKey(w.d).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}</span><b>${fmt(w.kg, 1)} kg</b><button class="x" data-wdel="${w.d}" aria-label="Borrar">×</button></div>`).join('') : '';
+  $('wHist').querySelectorAll('[data-wdel]').forEach(b => b.onclick = () => {
+    const i = db.weights.findIndex(w => w.d === b.dataset.wdel); if (i < 0) return;
+    removeWithUndo(db.weights, i, 'Pesaje borrado', syncWeight);
+  });
   const h = p.height / 100, bmi = p.weight / (h * h);
   $('anCalc').innerHTML = `
     <div><span>Tendencia semanal</span><b>${t ? `${t.perWeek >= 0 ? '+' : ''}${fmt(t.perWeek, 2)} kg (${fmt(t.pct, 2)} %)` : 'faltan datos'}</b></div>
@@ -800,7 +841,7 @@ const lnWeekday = (i) => (i + 1) % 7; // nuestro 0=lunes → plugin 1=lunes … 
 async function scheduleReminders() {
   await ready; const ln = LN(); if (!ln) return;
   const s = db.settings, list = [];
-  const base = { androidChannelId: 'forma', androidChannelName: 'Recordatorios', smallIcon: 'res://ic_launcher', foreground: true };
+  const base = { androidChannelId: 'forma', androidChannelName: 'Recordatorios', foreground: true };
   if (s.nt.shakes) db.plan.forEach((p, pi) => p.days.forEach(di => {
     const [h, m] = p.time.split(':').map(Number);
     list.push({ ...base, id: NT_ID.shake + pi * 10 + di, title: '🥤 Hora de tu batido', text: `${p.name} · ${p.g} g de proteína`, trigger: { every: { weekday: lnWeekday(di), hour: h, minute: m } } });
@@ -1038,8 +1079,16 @@ function renderMeas() {
     const last = pts[pts.length - 1], first = pts[0], dl = last.v - first.v;
     return `<div class="item"><div class="t"><b>${n}</b><span>${fmt(last.v, 1)} cm${pts.length > 1 ? ` · ${dl > 0 ? '+' : ''}${fmt(dl, 1)} cm desde ${first.d.slice(8)}/${first.d.slice(5, 7)}` : ''}</span></div>${spark(pts.slice(-12).map(p => p.v))}</div>`;
   }).join('');
+  $('measHist').style.display = db.measures.length ? '' : 'none';
   $('measList').innerHTML = rows || empty('chart', 'Mídete cada 2 a 4 semanas: a veces la báscula no cambia, pero la cintura sí.');
 }
+$('measHist').onclick = () => {
+  const draw = (b) => {
+    b.querySelector('#mhL').innerHTML = db.measures.slice().reverse().map(m => `<div class="item"><div class="t"><b>${fromKey(m.d).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}</b><span>${MEAS.filter(([k]) => m[k]).map(([k, n]) => `${n} ${fmt(m[k], 1)}`).join(' · ')} cm</span></div><button class="x" data-md="${m.d}">×</button></div>`).join('') || '<div class="sub">Sin medidas.</div>';
+    b.querySelectorAll('[data-md]').forEach(x => x.onclick = () => { const i = db.measures.findIndex(m => m.d === x.dataset.md); if (i >= 0) { removeWithUndo(db.measures, i, 'Medida borrada', () => draw(b)); draw(b); } });
+  };
+  openSheet(`<h3>Historial de medidas</h3><div class="list" id="mhL" style="margin-top:10px"></div>`, draw);
+};
 $('addMeas').onclick = () => {
   const last = db.measures[db.measures.length - 1] || {};
   openSheet(`<h3>Medidas de hoy</h3><div class="sub">En centímetros, con cinta métrica y sin apretar. Deja vacío lo que no midas.</div>
@@ -1169,13 +1218,14 @@ function renderKcal() {
   });
 }
 function foodSheet(pre = {}) {
-  openSheet(`<h3>Registrar comida</h3>
+  const editing = !!pre.id, v = (x) => x ? fmt(x, x % 1 ? 1 : 0).replace(/\./g, '').replace(',', '.') : '';
+  openSheet(`<h3>${editing ? 'Editar comida' : 'Registrar comida'}</h3>
     <label class="field"><span>Alimento</span><input class="input" id="fN" value="${esc(pre.n || '')}" placeholder="Ej. Pollo con arroz"></label>
     <div class="grid2 tight">
-      <label class="field"><span>Calorías (kcal)</span><input class="input" type="number" inputmode="decimal" id="fK"></label>
-      <label class="field"><span>Proteína (g)</span><input class="input" type="number" inputmode="decimal" id="fP"></label>
-      <label class="field"><span>Carbohidratos (g)</span><input class="input" type="number" inputmode="decimal" id="fC"></label>
-      <label class="field"><span>Grasa (g)</span><input class="input" type="number" inputmode="decimal" id="fF"></label>
+      <label class="field"><span>Calorías (kcal)</span><input class="input" type="number" inputmode="decimal" id="fK" value="${v(pre.kcal)}"></label>
+      <label class="field"><span>Proteína (g)</span><input class="input" type="number" inputmode="decimal" id="fP" value="${v(pre.g)}"></label>
+      <label class="field"><span>Carbohidratos (g)</span><input class="input" type="number" inputmode="decimal" id="fC" value="${v(pre.c)}"></label>
+      <label class="field"><span>Grasa (g)</span><input class="input" type="number" inputmode="decimal" id="fF" value="${v(pre.f)}"></label>
     </div>
     <div class="sub" id="fCalc"></div>
     <div class="tg" id="fFav"><div><b>Guardar en favoritos</b><span>Para registrarlo con un toque</span></div><div class="switch"><i></i></div></div>
@@ -1189,9 +1239,10 @@ function foodSheet(pre = {}) {
       let k = num('#fK'); if (!k) k = Math.round(p * 4 + c * 4 + f * 9);
       if (!k && !p) return toast('Escribe las calorías o los macros');
       if (k > 5000 || p > 300) return toast('Revisa los números: parecen demasiado altos');
-      day().prot.push({ id: uid(), n, g: p, kcal: k, c, f, at: nowHM() });
+      if (editing) Object.assign(pre, { n, g: p, kcal: k, c, f });
+      else day().prot.push({ id: uid(), n, g: p, kcal: k, c, f, at: nowHM() });
       if (b.querySelector('#fFav .switch').classList.contains('on') && !db.favs.some(x => x.n === n)) db.favs.push({ n, g: p, kcal: k, c, f });
-      save(); closeSheet(); render(); checkBadges(); toast(`+${fmt(k)} kcal`);
+      save(); closeSheet(); render(); checkBadges(); toast(editing ? 'Comida actualizada' : `+${fmt(k)} kcal`);
     };
   });
 }
