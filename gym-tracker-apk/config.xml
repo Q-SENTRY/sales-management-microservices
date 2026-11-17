@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.personal.gymtrack" version="1.0.0" xmlns="http://www.w3.org/ns/widgets">
+    <name>Forma</name>
+    <description>Seguimiento de gimnasio, agua, proteína y pasos</description>
+    <content src="index.html" />
+    <icon src="icon.png" />
+    <access origin="*" />
+    <preference name="Orientation" value="portrait" />
+    <preference name="BackgroundColor" value="0xff0a0a0b" />
+    <preference name="AndroidWindowSplashScreenBackground" value="#0a0a0b" />
+    <preference name="StatusBarBackgroundColor" value="#0a0a0b" />
+</widget>
