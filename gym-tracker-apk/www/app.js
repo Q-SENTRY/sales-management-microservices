@@ -103,7 +103,7 @@ let view = 'hoy';
 function go(v) {
   view = v;
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.dataset.view === v));
-  const tab = { agua: 'hoy', pasos: 'hoy' }[v] || v;
+  const tab = { agua: 'hoy', pasos: 'hoy', perfil: '' }[v] ?? v;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.go === tab));
   window.scrollTo({ top: 0 });
   render();
@@ -407,6 +407,214 @@ setInterval(() => {
   for (const s of shakesFor(k)) if (s.time === hm && !peek(k)?.shakes?.[s.id] && lastShakeAlert !== s.id + hm) { lastShakeAlert = s.id + hm; toast(`🥤 Hora de tu batido: ${s.name}`); vibrate([100, 60, 100]); }
 }, 20000);
 
+/* ================= COACH: peso, análisis, sugerencias ================= */
+if (!db.weights) db.weights = [];
+if (!db.profile.age) db.profile.age = 25;
+if (!db.profile.sex) db.profile.sex = 'h';
+const RATE = { definir: [-1.0, -0.5], mantener: [-0.25, 0.25], volumen: [0.25, 0.5] }; // % del peso por semana
+const GOAL_TXT = { definir: 'bajar grasa', mantener: 'mantener', volumen: 'ganar músculo' };
+function logWeight(kg, k = todayKey()) {
+  db.weights = db.weights.filter(w => w.d !== k);
+  db.weights.push({ d: k, kg }); db.weights.sort((a, b) => a.d.localeCompare(b.d));
+  if (k >= (db.weights[db.weights.length - 1]?.d || '')) db.profile.weight = kg;
+  save();
+}
+const daysAgo = (k) => Math.round((fromKey(todayKey()) - fromKey(k)) / 864e5);
+// Tendencia: regresión lineal sobre los pesajes de los últimos 28 días
+function trend() {
+  const pts = db.weights.filter(w => daysAgo(w.d) <= 28);
+  if (pts.length < 3 || daysAgo(pts[0].d) - daysAgo(pts[pts.length - 1].d) < 7) return null;
+  const xs = pts.map(w => -daysAgo(w.d)), ys = pts.map(w => w.kg), n = pts.length;
+  const mx = xs.reduce((a, b) => a + b) / n, my = ys.reduce((a, b) => a + b) / n;
+  let sxy = 0, sxx = 0; for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; }
+  const perDay = sxy / sxx, now = my + perDay * (0 - mx);
+  return { perWeek: perDay * 7, pct: perDay * 7 / now * 100, now, n, span: xs[n - 1] - xs[0] };
+}
+// Promedios reales de los últimos N días con registros
+function recent(n = 7) {
+  const out = { days: 0, water: 0, waterOk: 0, prot: 0, protOk: 0, steps: 0, gym: 0, min: 0 };
+  for (let i = 0; i < n; i++) {
+    const dt = fromKey(todayKey()); dt.setDate(dt.getDate() - i);
+    const k = keyOf(dt), d = peek(k); if (!d) continue;
+    const g = goals(k), touched = d.water || d.steps || d.prot.length || d.gym || d.ex.length;
+    if (!touched) continue;
+    out.days++; out.water += d.water / 1000; out.prot += protOf(d); out.steps += d.steps;
+    if (d.water / 1000 >= g.water) out.waterOk++; if (protOf(d) >= g.prot) out.protOk++;
+    if (d.gym) out.gym++; out.min += minOf(d);
+  }
+  if (out.days) { out.water /= out.days; out.prot /= out.days; out.steps /= out.days; }
+  return out;
+}
+function energy() {
+  const p = db.profile, w = +p.weight, h = +p.height, a = +p.age || 25;
+  const bmr = 10 * w + 6.25 * h - 5 * a + (p.sex === 'm' ? -161 : 5); // Mifflin-St Jeor
+  const r = recent(14);
+  const steps = r.days ? r.steps : 5000, gymWk = r.days ? r.gym / 2 : (+p.gymDays || 3);
+  let f = steps < 5000 ? 1.2 : steps < 7500 ? 1.375 : steps < 10000 ? 1.45 : 1.55;
+  f = Math.min(1.9, f + gymWk * 0.03);
+  const tdee = bmr * f;
+  const target = Math.round(tdee * ({ definir: 0.8, mantener: 1, volumen: 1.1 }[p.goal]) / 10) * 10;
+  const prot = goals().prot, fat = Math.round(w * 0.8);
+  const carbs = Math.max(0, Math.round((target - prot * 4 - fat * 9) / 4));
+  return { bmr: Math.round(bmr), f, tdee: Math.round(tdee), target, prot, fat, carbs, steps, gymWk };
+}
+// Progresión de cargas por máquina (comparando sesiones reales)
+function overload() {
+  const by = {};
+  for (const k of Object.keys(db.days).sort()) for (const x of db.days[k].ex || []) if (x.kg) (by[x.m] = by[x.m] || []).push({ k, kg: +x.kg, reps: +x.reps || 0, sets: +x.sets || 0 });
+  const out = [];
+  for (const [m, s] of Object.entries(by)) {
+    if (s.length < 2) continue;
+    const last = s[s.length - 1], prev = s[s.length - 2], first = s[0];
+    const gain = (last.kg - first.kg) / first.kg * 100;
+    if (last.kg === prev.kg && last.reps >= 10) out.push({ t: 'good', h: `${m}: toca subir peso`, b: `Hiciste ${last.reps} reps con ${fmt(last.kg, 1)} kg dos sesiones seguidas. Prueba ${fmt(Math.round(last.kg * 1.05 * 2) / 2, 1)} kg (+5 %) y baja a 8 reps.` });
+    else if (last.kg < prev.kg) out.push({ t: 'warn', h: `${m}: bajaste carga`, b: `De ${fmt(prev.kg, 1)} a ${fmt(last.kg, 1)} kg. Si no fue a propósito, revisa descanso y proteína.` });
+    else if (s.length >= 3) out.push({ t: 'good', h: `${m}: ${gain >= 0 ? '+' : ''}${fmt(gain, 1)} % de fuerza`, b: `De ${fmt(first.kg, 1)} kg (${first.k.slice(5)}) a ${fmt(last.kg, 1)} kg en ${s.length} sesiones.` });
+  }
+  return out.slice(0, 5);
+}
+function suggestions() {
+  const p = db.profile, g = goals(todayKey()), r = recent(7), t = trend(), out = [];
+  const lastW = db.weights[db.weights.length - 1];
+  if (!lastW || daysAgo(lastW.d) > 7) out.push({ t: 'warn', h: 'Regístrate el peso', b: lastW ? `Tu último pesaje fue hace ${daysAgo(lastW.d)} días. Sin pesajes no puedo medir tu progreso.` : 'Registra tu peso arriba. Con 3 pesajes en una semana calculo tu tendencia real.' });
+  if (t) {
+    const [lo, hi] = RATE[p.goal], pct = t.pct;
+    const ok = pct >= lo && pct <= hi;
+    const midKg = (lo + hi) / 2 / 100 * t.now, diffKcal = Math.round((midKg - t.perWeek) * 7700 / 7 / 10) * 10;
+    if (ok) out.push({ t: 'good', h: `Vas al ritmo correcto para ${GOAL_TXT[p.goal]}`, b: `Cambias ${t.perWeek >= 0 ? '+' : ''}${fmt(t.perWeek, 2)} kg/semana (${fmt(pct, 2)} %). El rango ideal es ${lo} a ${hi} % semanal.` });
+    else out.push({ t: 'bad', h: pct > hi ? (p.goal === 'definir' ? 'No estás bajando lo suficiente' : 'Estás subiendo demasiado rápido') : (p.goal === 'volumen' ? 'No estás subiendo de peso' : 'Estás bajando demasiado rápido'),
+      b: `Tendencia: ${t.perWeek >= 0 ? '+' : ''}${fmt(t.perWeek, 2)} kg/semana (${fmt(pct, 2)} %) con ${t.n} pesajes. Para ${GOAL_TXT[p.goal]} lo ideal es ${lo} a ${hi} %. Ajusta unas ${diffKcal > 0 ? '+' : ''}${diffKcal} kcal al día.` });
+  }
+  if (r.days >= 3) {
+    if (r.protOk < r.days * 0.7) out.push({ t: 'warn', h: 'Te falta proteína', b: `Promedio ${fmt(r.prot)} g/día frente a ${g.prot} g. Cumpliste ${r.protOk} de ${r.days} días. Un batido extra de ${Math.max(20, Math.round((g.prot - r.prot) / 5) * 5)} g lo cubre.` });
+    else out.push({ t: 'good', h: 'Proteína bien cubierta', b: `Cumpliste ${r.protOk} de ${r.days} días (promedio ${fmt(r.prot)} g).` });
+    if (r.waterOk < r.days * 0.7) out.push({ t: 'warn', h: 'Bebe más agua', b: `Promedio ${fmt(r.water, 1)} L/día frente a ${fmt(g.water, 1)} L. Lleva una botella de 750 ml y rellénala ${Math.ceil(g.water / 0.75)} veces.` });
+    if (r.steps < p.stepGoal * 0.8) out.push({ t: 'warn', h: 'Muévete un poco más', b: `Promedio ${fmt(r.steps)} pasos frente a ${fmt(p.stepGoal)}. Un paseo de 20 min suma unos 2.000 pasos.` });
+  }
+  if (r.gym < p.gymDays) out.push({ t: r.gym ? 'warn' : 'bad', h: `${r.gym} de ${p.gymDays} días de gym esta última semana`, b: r.gym ? `Te faltan ${p.gymDays - r.gym} para tu meta. La constancia es lo que más resultados da.` : 'Esta semana aún no entrenas. Aunque sean 30 min, ve hoy.' });
+  else out.push({ t: 'good', h: 'Cumpliste tus días de gym', b: `${r.gym} días y ${r.min} minutos en los últimos 7 días.` });
+  return out.concat(overload());
+}
+function weightChart() {
+  const pts = db.weights.filter(w => daysAgo(w.d) <= 90);
+  if (pts.length < 2) return `<div class="empty">Registra al menos 2 pesajes para ver tu gráfica.</div>`;
+  const W = 320, H = 140, xs = pts.map(w => -daysAgo(w.d)), ys = pts.map(w => w.kg);
+  const x0 = Math.min(...xs), x1 = Math.max(0, ...xs), y0 = Math.min(...ys) - 0.5, y1 = Math.max(...ys) + 0.5;
+  const X = (x) => 10 + (x - x0) / ((x1 - x0) || 1) * (W - 20), Y = (y) => 10 + (1 - (y - y0) / (y1 - y0)) * (H - 30);
+  // media móvil de 7 días
+  const avg = pts.map((w, i) => { const s = pts.filter(q => daysAgo(q.d) >= daysAgo(w.d) && daysAgo(q.d) < daysAgo(w.d) + 7); return [X(xs[i]), Y(s.reduce((a, q) => a + q.kg, 0) / s.length)]; });
+  const line = avg.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = line + ` L${avg[avg.length - 1][0].toFixed(1)} ${H - 20} L${avg[0][0].toFixed(1)} ${H - 20} Z`;
+  return `<svg viewBox="0 0 ${W} ${H}"><defs><linearGradient id="wg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#c6ff3d"/><stop offset="1" stop-color="#c6ff3d" stop-opacity="0"/></linearGradient></defs>
+    <path class="ar" d="${area}"/><path class="ln" d="${line}"/>
+    ${pts.map((w, i) => `<circle class="pt" cx="${X(xs[i]).toFixed(1)}" cy="${Y(w.kg).toFixed(1)}" r="2.5"/>`).join('')}
+    <text x="10" y="${H - 4}">${pts[0].d.slice(8)}/${pts[0].d.slice(5, 7)}</text><text x="${W - 10}" y="${H - 4}" text-anchor="end">hoy</text>
+    <text x="${W - 10}" y="12" text-anchor="end">${fmt(Math.max(...ys), 1)}</text><text x="${W - 10}" y="${H - 22}" text-anchor="end">${fmt(Math.min(...ys), 1)}</text></svg>`;
+}
+function renderCoach() {
+  const p = db.profile, last = db.weights[db.weights.length - 1], t = trend();
+  $('wNow').textContent = last ? fmt(last.kg, 1) : fmt(p.weight, 1);
+  $('wLast').textContent = last ? (daysAgo(last.d) ? `hace ${daysAgo(last.d)} d` : 'hoy') : 'sin pesajes';
+  const first = db.weights.find(w => daysAgo(w.d) <= 30);
+  const dl = last && first && first !== last ? last.kg - first.kg : null;
+  $('wDelta').textContent = dl === null ? '' : `${dl > 0 ? '▲ +' : dl < 0 ? '▼ ' : ''}${fmt(dl, 1)} kg en 30 d`;
+  $('wDelta').className = 'delta ' + (dl > 0 ? 'up' : dl < 0 ? 'down' : '');
+  $('wChart').innerHTML = weightChart();
+  const h = p.height / 100, bmi = p.weight / (h * h);
+  $('anCalc').innerHTML = `
+    <div><span>Tendencia semanal</span><b>${t ? `${t.perWeek >= 0 ? '+' : ''}${fmt(t.perWeek, 2)} kg (${fmt(t.pct, 2)} %)` : 'faltan datos'}</b></div>
+    <div><span>Ritmo ideal (${GOAL_TXT[p.goal]})</span><b>${fmt(RATE[p.goal][0] / 100 * p.weight, 2)} a ${fmt(RATE[p.goal][1] / 100 * p.weight, 2)} kg/sem</b></div>
+    <div><span>IMC</span><b>${fmt(bmi, 1)}</b></div>
+    <div><span>Peso saludable para ${p.height} cm</span><b>${fmt(18.5 * h * h, 1)} – ${fmt(24.9 * h * h, 1)} kg</b></div>`;
+  const e = energy();
+  $('enCalc').innerHTML = `
+    <div><span>Metabolismo basal</span><b>${fmt(e.bmr)} kcal</b></div>
+    <div><span>Gasto diario (×${fmt(e.f, 2)})</span><b>${fmt(e.tdee)} kcal</b></div>
+    <div><span>Calorías para ${GOAL_TXT[p.goal]}</span><b>${fmt(e.target)} kcal</b></div>
+    <div><span>Proteína · Grasa · Carbohidratos</span><b>${e.prot} · ${e.fat} · ${e.carbs} g</b></div>`;
+  $('enNote').textContent = `Fórmula Mifflin-St Jeor con tu edad, sexo, peso y altura. La actividad sale de tus últimos 14 días: ${fmt(e.steps)} pasos de promedio y ${fmt(e.gymWk, 1)} días de gym por semana. Es una estimación: si tu peso no se mueve como esperas, la tendencia real manda.`;
+  $('sugList').innerHTML = suggestions().map(s => `<div class="sug ${s.t}"><div><b>${esc(s.h)}</b><span>${esc(s.b)}</span></div></div>`).join('');
+  aiStatus();
+}
+$('wSave').onclick = () => {
+  const v = parseFloat(String($('wIn').value).replace(',', '.'));
+  if (!(v >= 30 && v <= 300)) return toast('Escribe un peso válido');
+  const prev = db.weights[db.weights.length - 1];
+  logWeight(v); $('wIn').value = ''; vibrate(20);
+  toast(prev ? `Peso guardado (${v - prev.kg >= 0 ? '+' : ''}${fmt(v - prev.kg, 1)} kg)` : 'Peso guardado');
+  render();
+};
+
+/* ================= Coach con IA (Claude) ================= */
+let aiMsgs = [];
+const aiKey = () => { try { return localStorage.getItem('forma.aikey') || ''; } catch (e) { return ''; } };
+function aiStatus() { $('aiStatus').textContent = aiKey() ? 'Claude analiza tus datos reales y te da un plan. Cada consulta usa tu cuenta de Anthropic.' : 'Para usar la IA, toca "Clave" y pega tu clave de API de Anthropic (console.anthropic.com). Las sugerencias de arriba funcionan sin ella.'; }
+$('aiKeyBtn').onclick = () => {
+  openSheet(`<h3>Clave de Anthropic</h3><div class="sub">Se guarda solo en este celular. Créala en console.anthropic.com → API Keys.</div>
+    <label class="field"><span>Clave</span><input class="input" id="kIn" type="password" placeholder="sk-ant-…" value="${esc(aiKey())}"></label>
+    <div class="btnrow"><button class="btn danger" id="kDel">Borrar</button><button class="btn primary" id="kOk">Guardar</button></div>`, (b) => {
+    b.querySelector('#kOk').onclick = () => { try { localStorage.setItem('forma.aikey', b.querySelector('#kIn').value.trim()); } catch (e) {} closeSheet(); aiStatus(); toast('Clave guardada'); };
+    b.querySelector('#kDel').onclick = () => { try { localStorage.removeItem('forma.aikey'); } catch (e) {} closeSheet(); aiStatus(); };
+  });
+};
+function dataSummary() {
+  const days = [];
+  for (let i = 0; i < 30; i++) {
+    const dt = fromKey(todayKey()); dt.setDate(dt.getDate() - i);
+    const k = keyOf(dt), d = peek(k); if (!d) continue;
+    days.push({ fecha: k, gym: d.gym, agua_L: +(d.water / 1000).toFixed(2), meta_agua_L: goals(k).water, proteina_g: protOf(d), meta_proteina_g: goals(k).prot, pasos: d.steps,
+      ejercicios: d.ex.map(x => ({ maquina: x.m, min: x.min, series: x.sets, reps: x.reps, kg: x.kg, hora: x.at })),
+      batidos: Object.entries(d.shakes || {}).map(([id, h]) => ({ nombre: db.plan.find(s => s.id === id)?.name, hora: h })) });
+  }
+  const t = trend(), e = energy(), p = db.profile;
+  return {
+    perfil: { edad: p.age, sexo: p.sex === 'm' ? 'mujer' : 'hombre', peso_kg: p.weight, altura_cm: p.height, objetivo: GOAL_TXT[p.goal], meta_pasos: p.stepGoal, meta_dias_gym_semana: p.gymDays },
+    pesajes: db.weights.slice(-30),
+    calculos: { tendencia_kg_semana: t ? +t.perWeek.toFixed(2) : null, tendencia_pct_semana: t ? +t.pct.toFixed(2) : null, ritmo_ideal_pct_semana: RATE[p.goal], imc: +(p.weight / (p.height / 100) ** 2).toFixed(1), metabolismo_basal: e.bmr, gasto_diario_estimado: e.tdee, calorias_objetivo: e.target, macros_g: { proteina: e.prot, grasa: e.fat, carbohidratos: e.carbs } },
+    plan_batidos: db.plan.map(s => ({ nombre: s.name, proteina_g: s.g, hora: s.time, dias: s.days.map(i => DAYS_LONG[i]) })),
+    ultimos_30_dias: days
+  };
+}
+const SYSTEM = `Eres el coach personal de fitness dentro de la app Forma. Respondes en español, con tono cercano y directo.
+Reglas:
+- Usa solo los datos que te pasan. No inventes cifras; si faltan datos para algo, dilo y explica qué registrar.
+- Los cálculos de la app (tendencia, calorías, macros) ya están hechos; apóyate en ellos y cítalos.
+- Da consejos concretos y accionables: qué cambiar en entrenamiento, proteína, agua, pasos y calorías, con números.
+- Sé breve: máximo unas 200 palabras, en viñetas cortas. Sin tablas ni encabezados de markdown.
+- No eres médico: si algo sugiere un problema de salud, recomienda consultar a un profesional.`;
+async function askAI(text, withData) {
+  if (!aiKey()) { $('aiKeyBtn').click(); return; }
+  if (!window.Anthropic) return toast('No se pudo cargar la IA');
+  const out = $('aiOut');
+  out.insertAdjacentHTML('beforeend', `<div class="msg me">${esc(withData ? 'Analiza mi progreso' : text)}</div><div class="msg load" id="aiLoad">Pensando…</div>`);
+  const content = withData ? `Estos son mis datos reales:\n${JSON.stringify(dataSummary())}\n\n${text}` : text;
+  aiMsgs.push({ role: 'user', content });
+  $('aiAnalyze').disabled = $('aiAsk').disabled = true;
+  try {
+    const client = new window.Anthropic({ apiKey: aiKey(), dangerouslyAllowBrowser: true });
+    const res = await client.beta.messages.create({
+      model: 'claude-opus-5-5', max_tokens: 4000, system: SYSTEM, messages: aiMsgs,
+      output_config: { effort: 'medium' },
+      betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default'
+    });
+    let reply;
+    if (res.stop_reason === 'refusal') reply = 'La IA no pudo responder a esta pregunta. Prueba a formularla de otra manera.';
+    else reply = res.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || '(sin respuesta)';
+    aiMsgs.push({ role: 'assistant', content: res.content });
+    $('aiLoad').outerHTML = `<div class="msg">${esc(reply)}</div>`;
+  } catch (err) {
+    aiMsgs.pop();
+    const A = window.Anthropic;
+    const msg = err instanceof A.AuthenticationError ? 'La clave no es válida. Revísala en "Clave".'
+      : err instanceof A.RateLimitError ? 'Demasiadas consultas seguidas. Espera un minuto.'
+      : err instanceof A.APIError && err.status ? `Error de la API (${err.status}).`
+      : 'Sin conexión con la IA. Revisa tu internet.';
+    $('aiLoad').outerHTML = `<div class="msg">${esc(msg)}</div>`;
+  } finally { $('aiAnalyze').disabled = $('aiAsk').disabled = false; }
+}
+$('aiAnalyze').onclick = () => { aiMsgs = []; $('aiOut').innerHTML = ''; askAI('Analiza mi progreso y dime las 3–5 cosas más importantes que debo cambiar esta semana.', true); };
+$('aiAsk').onclick = () => { const q = $('aiQ').value.trim(); if (!q) return; $('aiQ').value = ''; askAI(q, aiMsgs.length === 0); };
+
 /* ================= CALENDARIO ================= */
 let calM = new Date(); calM.setDate(1);
 let calSel = cur;
@@ -445,7 +653,8 @@ $('calNext').onclick = () => { calM.setMonth(calM.getMonth() + 1); renderCal(); 
 /* ================= PERFIL ================= */
 function renderPerfil() {
   const p = db.profile;
-  $('pfName').value = p.name; $('pfWeight').value = p.weight; $('pfHeight').value = p.height;
+  $('pfName').value = p.name; $('pfAge').value = p.age;
+  document.querySelectorAll('#pfSex button').forEach(b => b.classList.toggle('on', b.dataset.v === p.sex)); $('pfWeight').value = p.weight; $('pfHeight').value = p.height;
   $('pfSteps').value = p.stepGoal; $('pfDays').value = p.gymDays;
   document.querySelectorAll('#pfGoal button').forEach(b => b.classList.toggle('on', b.dataset.v === p.goal));
   const g = goals(), bmi = p.weight / Math.pow(p.height / 100, 2);
@@ -456,11 +665,14 @@ function renderPerfil() {
     <div><span>Proteína (${PROT_FACTOR[p.goal]} g/kg)</span><b>${g.prot} g</b></div>
     <div><span>Proteína por comida (4)</span><b>${Math.round(g.prot / 4)} g</b></div>
     <div><span>Pasos → km</span><b>${fmt(kmOf(p.stepGoal), 1)} km</b></div>
-    <div><span>IMC</span><b>${fmt(bmi, 1)} · ${bmiTxt}</b></div>`;
+    <div><span>IMC</span><b>${fmt(bmi, 1)} · ${bmiTxt}</b></div>
+    <div><span>Calorías diarias (${GOAL_TXT[p.goal]})</span><b>${fmt(energy().target)} kcal</b></div>`;
 }
 const bindNum = (id, f, min, max) => $(id).addEventListener('change', () => { const v = +$(id).value; if (v >= min && v <= max) { db.profile[f] = v; save(); render(); } else { toast('Valor no válido'); renderPerfil(); } });
 $('pfName').addEventListener('input', () => { db.profile.name = $('pfName').value.trim(); save(); renderTop(); });
-bindNum('pfWeight', 'weight', 30, 300); bindNum('pfHeight', 'height', 120, 230);
+$('pfWeight').addEventListener('change', () => { const v = +$('pfWeight').value; if (v >= 30 && v <= 300) { logWeight(v); render(); } else { toast('Valor no válido'); renderPerfil(); } });
+bindNum('pfAge', 'age', 12, 100);
+document.querySelectorAll('#pfSex button').forEach(b => b.onclick = () => { db.profile.sex = b.dataset.v; save(); render(); }); bindNum('pfHeight', 'height', 120, 230);
 bindNum('pfSteps', 'stepGoal', 1000, 50000); bindNum('pfDays', 'gymDays', 1, 7);
 document.querySelectorAll('#pfGoal button').forEach(b => b.onclick = () => { db.profile.goal = b.dataset.v; save(); render(); });
 $('exportBtn').onclick = async () => {
@@ -480,7 +692,8 @@ $('importBtn').onclick = () => {
 /* ================= Arranque ================= */
 function render() {
   renderTop();
-  ({ hoy: renderHoy, gym: renderGym, nutri: renderNutri, agua: renderAgua, pasos: renderPasos, cal: renderCal, perfil: renderPerfil })[view]();
+  ({ hoy: renderHoy, gym: renderGym, nutri: renderNutri, agua: renderAgua, pasos: renderPasos, cal: renderCal, perfil: renderPerfil, coach: renderCoach })[view]();
+  $('avatar').textContent = (db.profile.name || '?').trim().charAt(0).toUpperCase() || '?';
 }
 // el botón atrás de Android cierra la hoja o vuelve a Hoy
 document.addEventListener('backbutton', (e) => {
@@ -492,5 +705,6 @@ let lastToday = todayKey();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (cur === lastToday && lastToday !== todayKey()) cur = todayKey(); lastToday = todayKey(); render(); } });
 day(); save();
 render(); runTick();
-if (!db.profile.name) setTimeout(() => { toast('Completa tu perfil para calcular tus metas'); }, 900);
+if (!db.profile.name) setTimeout(() => go('perfil'), 300);
+else { const lw = db.weights[db.weights.length - 1]; if (!lw || daysAgo(lw.d) >= 7) setTimeout(() => toast('Hace días que no te pesas · ve a Coach'), 1200); }
 })();
