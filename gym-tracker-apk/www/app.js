@@ -90,6 +90,7 @@ function setRing(el, r, ratio) {
   const c = 2 * Math.PI * r;
   el.style.strokeDasharray = c;
   el.style.strokeDashoffset = c * (1 - clamp01(ratio));
+  el.classList.toggle('zero', !(ratio > 0));
 }
 function openSheet(html, mount) {
   $('sheetBody').innerHTML = html;
@@ -114,6 +115,50 @@ document.addEventListener('click', (e) => {
   const g = e.target.closest('[data-go]');
   if (g) go(g.dataset.go);
 });
+
+
+/* ================= Ilustraciones y animaciones ================= */
+const ART = {
+  dumbbell: '<rect x="18" y="44" width="84" height="12" rx="6" class="a2"/><rect x="22" y="26" width="16" height="48" rx="6" class="a1"/><rect x="82" y="26" width="16" height="48" rx="6" class="a1"/><rect x="10" y="34" width="10" height="32" rx="5" class="a3"/><rect x="100" y="34" width="10" height="32" rx="5" class="a3"/>',
+  shaker: '<path d="M38 30h44l-6 62a6 6 0 0 1-6 6H50a6 6 0 0 1-6-6z" class="a3"/><path d="M41 52h38l-4 40a4 4 0 0 1-4 4H49a4 4 0 0 1-4-4z" class="a1"/><rect x="36" y="20" width="48" height="12" rx="5" class="a2"/><rect x="54" y="8" width="12" height="14" rx="4" class="a2"/><circle cx="52" cy="70" r="3" class="bub"/><circle cx="66" cy="80" r="2" class="bub b2"/>',
+  calendar: '<rect x="18" y="22" width="84" height="74" rx="12" class="a3"/><rect x="18" y="22" width="84" height="20" rx="10" class="a1"/><rect x="36" y="12" width="8" height="20" rx="4" class="a2"/><rect x="76" y="12" width="8" height="20" rx="4" class="a2"/><circle cx="42" cy="62" r="6" class="a2"/><circle cx="60" cy="62" r="6" class="a2 o"/><circle cx="78" cy="62" r="6" class="a2 o"/><circle cx="42" cy="80" r="6" class="a2 o"/>',
+  scale: '<rect x="16" y="30" width="88" height="66" rx="18" class="a3"/><path d="M38 52a22 22 0 0 1 44 0z" class="a2"/><path d="M60 52l9-12" class="needle"/><circle cx="60" cy="52" r="3" class="a1"/>',
+  chart: '<path d="M14 92h92" class="axis"/><rect x="22" y="64" width="14" height="28" rx="4" class="a3"/><rect x="44" y="50" width="14" height="42" rx="4" class="a3"/><rect x="66" y="38" width="14" height="54" rx="4" class="a3"/><rect x="88" y="22" width="14" height="70" rx="4" class="a1"/>'
+};
+const empty = (art, text) => `<div class="empty"><svg class="art" viewBox="0 0 120 104">${ART[art]}</svg><div>${text}</div></div>`;
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function confetti(colors = ['#c6ff3d', '#4cc9ff', '#ff7a59', '#b388ff', '#ffffff']) {
+  if (reduceMotion) return;
+  const box = document.createElement('div'); box.className = 'confetti';
+  for (let i = 0; i < 70; i++) {
+    const c = document.createElement('i');
+    const dx = (Math.random() - 0.5) * 2, dy = Math.random();
+    c.style.cssText = `--x:${dx * 46}vw;--y:${-(30 + dy * 45)}vh;--r:${Math.random() * 900 - 450}deg;--d:${0.9 + Math.random() * 0.9}s;background:${colors[i % colors.length]};left:${50 + dx * 6}%;width:${5 + Math.random() * 6}px;height:${8 + Math.random() * 8}px;border-radius:${Math.random() > 0.6 ? '50%' : '2px'}`;
+    box.appendChild(c);
+  }
+  document.body.appendChild(box); setTimeout(() => box.remove(), 2200);
+}
+// Celebra una sola vez cada meta del día
+function celebrate(k, key, msg) {
+  const d = day(k); d.cel = d.cel || {};
+  if (d.cel[key]) return; d.cel[key] = 1; save();
+  confetti(); vibrate([30, 40, 30]); if (msg) toast(msg);
+}
+function checkGoals() {
+  const r = ratios(cur), d = peek(cur); if (!d) return;
+  if (r.w >= 1) celebrate(cur, 'w', '¡Meta de agua cumplida! 💧');
+  if (r.p >= 1) celebrate(cur, 'p', '¡Meta de proteína cumplida! 🎯');
+  if (r.s >= 1) celebrate(cur, 's', '¡Meta de pasos cumplida! 👟');
+  if (r.w >= 1 && r.p >= 1 && r.s >= 1) celebrate(cur, 'all', '¡Día perfecto! 🏆');
+}
+// efecto de onda al tocar
+document.addEventListener('pointerdown', (e) => {
+  const b = e.target.closest('.btn,.chip,.quick button,.seg button,.days7 button,.tabs button');
+  if (!b || reduceMotion) return;
+  const r = b.getBoundingClientRect(), s = document.createElement('span'), size = Math.max(r.width, r.height) * 2;
+  s.className = 'ripple'; s.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - r.left - size / 2}px;top:${e.clientY - r.top - size / 2}px`;
+  b.appendChild(s); setTimeout(() => s.remove(), 600);
+}, { passive: true });
 
 /* ================= Encabezado y día ================= */
 function renderTop() {
@@ -147,7 +192,7 @@ function renderHoy() {
   $('gymToggle').classList.toggle('on', d.gym);
   $('gymState').textContent = d.gym ? 'Entrenaste ✓' : '¿Fuiste hoy?';
   const wk = gymInWeek(weekStart(fromKey(cur))), st = weekStreak();
-  $('streakTxt').textContent = `${wk} de ${db.profile.gymDays} días esta semana` + (st ? ` · racha ${st} sem` : '');
+  $('streakTxt').innerHTML = `${wk} de ${db.profile.gymDays} días esta semana` + (st ? ` · <span class="flame">🔥</span> racha ${st} sem` : '');
 
   animateNum($('tWater'), d.water / 1000, 1); $('tWaterGoal').textContent = fmt(g.water, 1);
   $('mWater').style.width = r.w * 100 + '%';
@@ -164,7 +209,7 @@ function renderHoy() {
   $('tVol').textContent = volOf(d) ? `${fmt(volOf(d))} kg movidos` : '';
 
   const sh = shakesFor(cur);
-  $('todayShakes').innerHTML = sh.length ? sh.map(shakeItem).join('') : `<div class="empty">No tienes batidos para este día. Créalos en Nutrición.</div>`;
+  $('todayShakes').innerHTML = sh.length ? sh.map(shakeItem).join('') : empty('shaker', 'No tienes batidos para este día. Créalos en Nutrición.');
   bindShakeChecks($('todayShakes'));
 
   // semana
@@ -180,17 +225,25 @@ function renderHoy() {
 }
 $('gymToggle').onclick = () => {
   const d = day(); d.gym = !d.gym; save(); vibrate(20);
-  if (d.gym) toast('Día de gym registrado 💪 Meta de agua +0,5 L');
+  if (d.gym) { toast('Día de gym registrado 💪 Meta de agua +0,5 L'); confetti(['#c6ff3d', '#ffffff', '#9be020']); }
   render();
 };
 function addWater(ml) {
   const d = day(); d.water = Math.max(0, d.water + ml); save(); vibrate();
   const g = goals();
-  if (ml > 0 && d.water / 1000 >= g.water && (d.water - ml) / 1000 < g.water) toast('¡Meta de agua cumplida! 💧');
-  else toast(ml > 0 ? `+${ml} ml de agua` : `${ml} ml`);
+  if (!(ml > 0 && d.water / 1000 >= g.water)) toast(ml > 0 ? `+${ml} ml de agua` : `${ml} ml`);
+  if (ml > 0) dropFx();
   render();
 }
 
+function dropFx() {
+  if (reduceMotion) return;
+  const t = document.querySelector('.view.on .bottle') || document.querySelector('.view.on [data-water]');
+  if (!t) return;
+  const r = t.getBoundingClientRect(), d = document.createElement('div');
+  d.className = 'drop'; d.style.left = (r.left + r.width / 2 - 9) + 'px'; d.style.top = (r.top - 10) + 'px';
+  document.body.appendChild(d); setTimeout(() => d.remove(), 900);
+}
 /* ================= AGUA ================= */
 function renderAgua() {
   const d = day(), g = goals();
@@ -256,7 +309,7 @@ function renderGym() {
   $('exList').innerHTML = d.ex.length ? d.ex.map(x => `
     <div class="item"><div class="ic">🏋️</div><div class="t"><b>${esc(x.m)}</b>
     <span>${x.at || ''} · ${x.min} min${x.sets ? ` · ${x.sets}×${x.reps || 0}` : ''}${x.kg ? ` · ${fmt(x.kg, 1)} kg` : ''}</span></div>
-    <button class="x" data-del="${x.id}">×</button></div>`).join('') : `<div class="empty">Aún no registras ejercicios este día.</div>`;
+    <button class="x" data-del="${x.id}">×</button></div>`).join('') : empty('dumbbell', 'Aún no registras ejercicios este día. Usa el cronómetro o toca + Añadir.');
   $('exList').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { d.ex = d.ex.filter(x => x.id !== b.dataset.del); save(); render(); });
   const series = d.ex.reduce((a, x) => a + (+x.sets || 0), 0);
   $('exTotals').innerHTML = d.ex.length ? `<div><b>${minOf(d)}</b><span>minutos</span></div><div><b>${series}</b><span>series</span></div><div><b>${fmt(volOf(d))}</b><span>kg volumen</span></div>` : '';
@@ -268,7 +321,7 @@ function renderGym() {
     for (const x of v.ex || []) { cnt[x.m] = (cnt[x.m] || 0) + 1; mins[x.m] = (mins[x.m] || 0) + (+x.min || 0); }
   }
   const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 5), mx = top[0]?.[1] || 1;
-  $('topMach').innerHTML = top.length ? top.map(([m, n]) => `<div class="item"><div class="t"><b>${esc(m)}</b><span>${n} ${n === 1 ? 'vez' : 'veces'} · ${mins[m]} min en 30 días</span><div class="bar-h"><i style="width:${n / mx * 100}%"></i></div></div></div>`).join('') : `<div class="empty">Aquí verás las máquinas que más usas.</div>`;
+  $('topMach').innerHTML = top.length ? top.map(([m, n]) => `<div class="item"><div class="t"><b>${esc(m)}</b><span>${n} ${n === 1 ? 'vez' : 'veces'} · ${mins[m]} min en 30 días</span><div class="bar-h"><i style="width:${n / mx * 100}%"></i></div></div></div>`).join('') : empty('chart', 'Aquí verás las máquinas que más usas.');
 }
 function exSheet(pre = {}) {
   openSheet(`<h3>Añadir ejercicio</h3>
@@ -349,7 +402,7 @@ function renderNutri() {
   $('shakePlan').innerHTML = db.plan.length ? db.plan.slice().sort((a, b) => a.time.localeCompare(b.time)).map(s => `
     <div class="item"><div class="ic">🥤</div><div class="t"><b>${esc(s.name)} · ${s.g} g</b>
     <span>${s.time} · ${s.days.length === 7 ? 'todos los días' : s.days.map(i => DAYS_LONG[i].slice(0, 3)).join(', ')}</span></div>
-    <button class="x" data-edit="${s.id}">✎</button></div>`).join('') : `<div class="empty">Aún no tienes batidos en tu plan.</div>`;
+    <button class="x" data-edit="${s.id}">✎</button></div>`).join('') : empty('shaker', 'Aún no tienes batidos en tu plan.');
   $('shakePlan').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => shakeSheet(db.plan.find(s => s.id === b.dataset.edit)));
 }
 $('addProt').onclick = () => {
@@ -497,7 +550,7 @@ function suggestions() {
 }
 function weightChart() {
   const pts = db.weights.filter(w => daysAgo(w.d) <= 90);
-  if (pts.length < 2) return `<div class="empty">Registra al menos 2 pesajes para ver tu gráfica.</div>`;
+  if (pts.length < 2) return empty('scale', 'Registra al menos 2 pesajes para ver tu gráfica.');
   const W = 320, H = 140, xs = pts.map(w => -daysAgo(w.d)), ys = pts.map(w => w.kg);
   const x0 = Math.min(...xs), x1 = Math.max(0, ...xs), y0 = Math.min(...ys) - 0.5, y1 = Math.max(...ys) + 0.5;
   const X = (x) => 10 + (x - x0) / ((x1 - x0) || 1) * (W - 20), Y = (y) => 10 + (1 - (y - y0) / (y1 - y0)) * (H - 30);
@@ -506,7 +559,7 @@ function weightChart() {
   const line = avg.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
   const area = line + ` L${avg[avg.length - 1][0].toFixed(1)} ${H - 20} L${avg[0][0].toFixed(1)} ${H - 20} Z`;
   return `<svg viewBox="0 0 ${W} ${H}"><defs><linearGradient id="wg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#c6ff3d"/><stop offset="1" stop-color="#c6ff3d" stop-opacity="0"/></linearGradient></defs>
-    <path class="ar" d="${area}"/><path class="ln" d="${line}"/>
+    <path class="ar" d="${area}"/><path class="ln draw" pathLength="1" d="${line}"/>
     ${pts.map((w, i) => `<circle class="pt" cx="${X(xs[i]).toFixed(1)}" cy="${Y(w.kg).toFixed(1)}" r="2.5"/>`).join('')}
     <text x="10" y="${H - 4}">${pts[0].d.slice(8)}/${pts[0].d.slice(5, 7)}</text><text x="${W - 10}" y="${H - 4}" text-anchor="end">hoy</text>
     <text x="${W - 10}" y="12" text-anchor="end">${fmt(Math.max(...ys), 1)}</text><text x="${W - 10}" y="${H - 22}" text-anchor="end">${fmt(Math.min(...ys), 1)}</text></svg>`;
@@ -647,7 +700,7 @@ function renderCal() {
       <div><span>Pasos</span><b>${fmt(d.steps)}</b></div>
       ${d.ex.length ? `<div><span>Máquinas</span><b>${d.ex.map(x => esc(x.m) + ' ' + x.min + "'").join(', ')}</b></div>` : ''}
       ${Object.keys(d.shakes || {}).length ? `<div><span>Batidos</span><b>${Object.entries(d.shakes).map(([id, t]) => esc(db.plan.find(s => s.id === id)?.name || 'Batido') + ' ' + t).join(', ')}</b></div>` : ''}
-    </div>` : `<div class="empty">Sin registros este día.</div>`);
+    </div>` : empty('calendar', 'Sin registros este día.'));
   const o = $('calOpen'); if (o) o.onclick = () => { cur = calSel; go('hoy'); };
 }
 $('calPrev').onclick = () => { calM.setMonth(calM.getMonth() - 1); renderCal(); };
@@ -696,6 +749,9 @@ $('importBtn').onclick = () => {
 function render() {
   renderTop();
   ({ hoy: renderHoy, gym: renderGym, nutri: renderNutri, agua: renderAgua, pasos: renderPasos, cal: renderCal, perfil: renderPerfil, coach: renderCoach })[view]();
+  if (view === 'hoy' || view === 'nutri' || view === 'agua' || view === 'pasos') checkGoals();
+  $('stepWalk') && $('stepWalk').classList.toggle('on', live);
+  $('scoreRing') && $('scoreRing').classList.toggle('full', (() => { const r = ratios(cur); return r.w >= 1 && r.p >= 1 && r.s >= 1; })());
   $('avatar').textContent = (db.profile.name || '?').trim().charAt(0).toUpperCase() || '?';
 }
 // el botón atrás de Android cierra la hoja o vuelve a Hoy
