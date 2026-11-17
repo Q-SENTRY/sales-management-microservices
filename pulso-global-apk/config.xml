@@ -12,4 +12,5 @@
     <preference name="Orientation" value="portrait" />
     <preference name="BackgroundColor" value="0xff0b0f17" />
     <plugin name="cordova-plugin-inappbrowser" />
+    <plugin name="cordova-plugin-advanced-http" />
 </widget>

@@ -218,23 +218,46 @@ function bust(u) {
   if (/gdeltproject|algolia/.test(u)) return u;
   return u + (u.includes('?') ? '&' : '?') + '_=' + Math.floor(Date.now() / 15000);
 }
-async function fetchText(url, ms = 12000) {
-  const order = [proxyPref, 0, 1, 2, 3].filter((v, i, a) => a.indexOf(v) === i);
-  let lastErr;
-  for (const p of order) {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), ms);
-    try {
-      const r = await fetch(PROXIES[p](bust(url)), { signal: ctrl.signal, cache: 'no-store' });
-      clearTimeout(t);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const txt = await r.text();
-      if (!txt || txt.length < 60) throw new Error('vacío');
-      if (p !== proxyPref) { proxyPref = p; store.set('proxyPref', p); }
-      return txt;
-    } catch (e) { clearTimeout(t); lastErr = e; }
+// En la APK: HTTP nativo (sin CORS, sin proxies) -> mucho más rápido
+const nativeReady = new Promise(res => {
+  if (!window.cordova) return res(null);
+  document.addEventListener('deviceready', () => res((window.cordova.plugin && window.cordova.plugin.http) || null), { once: true });
+  setTimeout(() => res(null), 4000);
+});
+function nativeGet(http, url, ms) {
+  return new Promise((ok, ko) => {
+    http.setRequestTimeout(ms / 1000);
+    http.sendRequest(url, { method: 'get', responseType: 'text', headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) PulsoGlobal' } },
+      r => (r.data && r.data.length >= 60) ? ok(r.data) : ko(new Error('vacío')),
+      e => ko(new Error('HTTP ' + (e && e.status))));
+  });
+}
+async function tryFetch(p, url, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(PROXIES[p](url), { signal: ctrl.signal, cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const txt = await r.text();
+    if (!txt || txt.length < 60) throw new Error('vacío');
+    return txt;
+  } finally { clearTimeout(t); }
+}
+async function fetchText(url, ms = 8000) {
+  const u = bust(url);
+  const http = await nativeReady;
+  if (http) {
+    try { return await nativeGet(http, u, ms); } catch (e) { /* cae a la vía web */ }
   }
-  throw lastErr || new Error('sin conexión');
+  // Directo y proxies a la vez: gana el primero que responda
+  const order = [proxyPref, 0, 1, 2, 3].filter((v, i, a) => a.indexOf(v) === i);
+  try {
+    return await Promise.any(order.map((p, k) =>
+      new Promise(r => setTimeout(r, k === 0 ? 0 : 400)).then(() => tryFetch(p, u, ms)).then(txt => {
+        if (p !== proxyPref) { proxyPref = p; store.set('proxyPref', p); }
+        return txt;
+      })));
+  } catch (e) { throw new Error('sin conexión'); }
 }
 
 async function pool(tasks, n, onDone) {
@@ -243,7 +266,7 @@ async function pool(tasks, n, onDone) {
     while (i < tasks.length) {
       const k = i++;
       try { out[k] = await tasks[k](); } catch (e) { out[k] = []; }
-      onDone && onDone();
+      onDone && onDone(out);
     }
   }
   await Promise.all(Array.from({ length: Math.min(n, tasks.length) }, worker));
@@ -1056,9 +1079,14 @@ async function refresh(manual) {
   const feeds = FEEDS.filter(f => cfg.en || !f.en);
   const tasks = [...feeds.map(f => () => loadFeed(f)), loadGDELT, loadQuakes];
   if (cfg.en) tasks.push(() => loadHN());
-  let done = 0;
-  const raw = await pool(tasks, 8, () => {
+  let done = 0, lastPaint = 0;
+  const raw = await pool(tasks, 16, (out) => {
     done++;
+    // muestra lo que ya llegó sin esperar a todas las fuentes
+    if (Date.now() - lastPaint > 1200 && done < tasks.length) {
+      const part = out.filter(Boolean).flat();
+      if (part.length > 20) { lastPaint = Date.now(); items = mergeItems(part, items); buildClusters(); render(); }
+    }
     fill.style.width = Math.round(done / tasks.length * 100) + '%';
     setStatus('load', `Cargando fuentes ${done} de ${tasks.length}…`);
   });
@@ -1090,7 +1118,7 @@ async function fastRefresh() {
   const feeds = FAST.filter(f => cfg.en || !f.en);
   const tasks = [...feeds.map(f => () => loadFeed(f)), () => loadGDELT('15min'), () => loadQuakes(true)];
   const keep = Object.assign({}, srcStats);
-  const raw = await pool(tasks, 6);
+  const raw = await pool(tasks, 10);
   srcStats = Object.assign(keep, srcStats);
   fastBusy = false;
   if (!raw.length || loading) return;
