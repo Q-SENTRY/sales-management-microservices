@@ -1337,5 +1337,5 @@ render(); runTick();
 ready.then(() => { scheduleReminders(); hcSync(true); widgetSync(); });
 document.addEventListener('resume', () => { hcSync(true); widgetSync(); render(); }, false);
 if (!db.onboarded) { db.onboarded = true; save(); setTimeout(() => { go('perfil'); toast('Completa tu perfil para calcular tus metas'); }, 300); }
-else { const lw = db.weights[db.weights.length - 1]; if (!lw || daysAgo(lw.d) >= 7) setTimeout(() => toast('Hace más de una semana que no te pesas'), 1200); }
+else { const lw = db.weights[db.weights.length - 1]; if (!lw || daysAgo(lw.d) >= 7) setTimeout(() => toast(lw ? 'Hace más de una semana que no te pesas' : 'Registra tu peso en Coach para seguir tu progreso'), 1200); }
 })();

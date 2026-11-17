@@ -459,3 +459,8 @@ html,body{overflow-x:hidden}
   .photos{grid-template-columns:repeat(4,1fr)}
   .restpill{bottom:calc(100px + env(safe-area-inset-bottom))}
 }
+/* Corrección: el dibujo vacío de la gráfica de peso se agrandaba y tapaba el campo y el botón */
+.chart .empty{height:100%;justify-content:center;padding:0}
+.chart svg.art,.art{width:92px!important;height:80px!important;max-width:92px;overflow:hidden!important;flex:none}
+.art,.lifter,.walk,.confetti,.drop,.ripple,.bubbles{pointer-events:none}
+.chart{overflow:hidden}
