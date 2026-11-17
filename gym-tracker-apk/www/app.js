@@ -548,7 +548,10 @@ $('wSave').onclick = () => {
 /* ================= Coach con IA (Claude) ================= */
 let aiMsgs = [];
 const aiKey = () => { try { return localStorage.getItem('forma.aikey') || ''; } catch (e) { return ''; } };
-function aiStatus() { $('aiStatus').textContent = aiKey() ? 'Claude analiza tus datos reales y te da un plan. Cada consulta usa tu cuenta de Anthropic.' : 'Para usar la IA, toca "Clave" y pega tu clave de API de Anthropic (console.anthropic.com). Las sugerencias de arriba funcionan sin ella.'; }
+function aiStatus() {
+  $('aiBox').style.display = aiKey() ? '' : 'none';
+  $('aiKeyBtn').textContent = aiKey() ? 'Clave' : 'Activar';
+  $('aiStatus').textContent = aiKey() ? 'Claude analiza tus datos reales y te da un plan. Cada consulta usa tu cuenta de Anthropic.' : 'No hace falta: todo lo de arriba funciona sin IA. Si algún día quieres un análisis escrito por Claude, toca "Activar" y pega una clave de Anthropic.'; }
 $('aiKeyBtn').onclick = () => {
   openSheet(`<h3>Clave de Anthropic</h3><div class="sub">Se guarda solo en este celular. Créala en console.anthropic.com → API Keys.</div>
     <label class="field"><span>Clave</span><input class="input" id="kIn" type="password" placeholder="sk-ant-…" value="${esc(aiKey())}"></label>
