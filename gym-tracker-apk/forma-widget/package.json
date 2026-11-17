@@ -1,0 +1,1 @@
+{ "name": "forma-widget", "version": "1.0.0", "description": "Widget de pantalla de inicio para Forma", "cordova": { "id": "forma-widget", "platforms": ["android"] }, "keywords": ["ecosystem:cordova", "cordova-android"], "license": "MIT" }

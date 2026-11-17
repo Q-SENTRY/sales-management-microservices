@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android" id="forma-widget" version="1.0.0">
+  <name>FormaWidget</name>
+  <js-module src="www/widget.js" name="FormaWidget">
+    <clobbers target="cordova.plugins.FormaWidget" />
+  </js-module>
+  <platform name="android">
+    <config-file target="res/xml/config.xml" parent="/*">
+      <feature name="FormaWidget"><param name="android-package" value="com.personal.formawidget.FormaWidgetPlugin" /></feature>
+    </config-file>
+    <config-file target="AndroidManifest.xml" parent="/manifest/application">
+      <receiver android:name="com.personal.formawidget.FormaWidget" android:exported="true" android:label="Forma">
+        <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+        <meta-data android:name="android.appwidget.provider" android:resource="@xml/forma_widget_info" />
+      </receiver>
+    </config-file>
+    <source-file src="src/android/FormaWidget.java" target-dir="src/com/personal/formawidget" />
+    <source-file src="src/android/FormaWidgetPlugin.java" target-dir="src/com/personal/formawidget" />
+    <resource-file src="src/android/res/layout/forma_widget.xml" target="res/layout/forma_widget.xml" />
+    <resource-file src="src/android/res/xml/forma_widget_info.xml" target="res/xml/forma_widget_info.xml" />
+    <resource-file src="src/android/res/drawable/forma_widget_bg.xml" target="res/drawable/forma_widget_bg.xml" />
+    <resource-file src="src/android/res/drawable/forma_widget_btn.xml" target="res/drawable/forma_widget_btn.xml" />
+    <resource-file src="src/android/res/drawable/forma_widget_btn_on.xml" target="res/drawable/forma_widget_btn_on.xml" />
+  </platform>
+</plugin>

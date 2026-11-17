@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/fw_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="14dp" android:background="@drawable/forma_widget_bg">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="FORMA · HOY"
+        android:textColor="#C6FF3D" android:textSize="11sp" android:textStyle="bold" android:letterSpacing="0.1" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+        android:text="Agua" android:textColor="#8B8B92" android:textSize="11sp" />
+    <TextView android:id="@+id/fw_water" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="0.0 / 2.5 L" android:textColor="#F2F2F3" android:textSize="16sp" android:textStyle="bold" />
+    <ProgressBar android:id="@+id/fw_water_bar" style="@android:style/Widget.ProgressBar.Horizontal"
+        android:layout_width="match_parent" android:layout_height="6dp" android:max="100" android:progressTint="#4CC9FF" android:progressBackgroundTint="#2A2A2E" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+        android:text="Proteína" android:textColor="#8B8B92" android:textSize="11sp" />
+    <TextView android:id="@+id/fw_prot" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="0 / 120 g" android:textColor="#F2F2F3" android:textSize="16sp" android:textStyle="bold" />
+    <ProgressBar android:id="@+id/fw_prot_bar" style="@android:style/Widget.ProgressBar.Horizontal"
+        android:layout_width="match_parent" android:layout_height="6dp" android:max="100" android:progressTint="#FF7A59" android:progressBackgroundTint="#2A2A2E" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:orientation="horizontal">
+        <TextView android:id="@+id/fw_add" android:layout_width="0dp" android:layout_weight="1" android:layout_height="36dp"
+            android:gravity="center" android:text="+250 ml" android:textColor="#F2F2F3" android:textStyle="bold" android:textSize="13sp"
+            android:background="@drawable/forma_widget_btn" />
+        <View android:layout_width="8dp" android:layout_height="1dp" />
+        <TextView android:id="@+id/fw_gym" android:layout_width="0dp" android:layout_weight="1" android:layout_height="36dp"
+            android:gravity="center" android:text="Fui al gym" android:textColor="#F2F2F3" android:textStyle="bold" android:textSize="13sp"
+            android:background="@drawable/forma_widget_btn" />
+    </LinearLayout>
+</LinearLayout>
