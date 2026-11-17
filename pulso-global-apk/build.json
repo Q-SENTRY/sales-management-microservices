@@ -1,0 +1,1 @@
+{"android":{"debug":{"keystore":"pulso.keystore","storePassword":"pulso1234","alias":"pulso","password":"pulso1234","keystoreType":""},"release":{"keystore":"pulso.keystore","storePassword":"pulso1234","alias":"pulso","password":"pulso1234","keystoreType":"","packageType":"apk"}}}

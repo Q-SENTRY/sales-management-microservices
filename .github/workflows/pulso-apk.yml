@@ -22,13 +22,13 @@ jobs:
           cp ../pulso-global-apk/config.xml /tmp/config.xml
           cordova create /tmp/pulso com.personal.pulsoglobal "Pulso Global"
           rm -rf /tmp/pulso/www && cp -r www /tmp/pulso/www
-          cp config.xml icon.png /tmp/pulso/
+          cp config.xml icon.png build.json pulso.keystore /tmp/pulso/
           cd /tmp/pulso
           cordova platform add android@13
           cordova plugin add cordova-plugin-inappbrowser
           cordova plugin add cordova-plugin-advanced-http
-          cordova build android --debug -- --packageType=apk
-          cp platforms/android/app/build/outputs/apk/debug/app-debug.apk $GITHUB_WORKSPACE/pulso-global-apk/PulsoGlobal.apk
+          cordova build android --release --buildConfig=build.json
+          cp platforms/android/app/build/outputs/apk/release/app-release.apk $GITHUB_WORKSPACE/pulso-global-apk/PulsoGlobal.apk
       - uses: actions/upload-artifact@v4
         with: { name: PulsoGlobal-apk, path: pulso-global-apk/PulsoGlobal.apk }
       - name: Commit APK
