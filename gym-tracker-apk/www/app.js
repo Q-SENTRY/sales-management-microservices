@@ -52,6 +52,17 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 const wd = (d) => (d.getDay() + 6) % 7; // 0 = lunes
 const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const DAYS_LONG = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+// "Todos los días", "De lunes a viernes", "Fines de semana" o "lun, mié, vie"
+function daysLabel(days) {
+  const d = [...new Set(days)].sort((a, b) => a - b), j = d.join(',');
+  if (!d.length) return 'Sin día asignado';
+  if (d.length === 7) return 'Todos los días';
+  if (j === '0,1,2,3,4') return 'De lunes a viernes';
+  if (j === '0,1,2,3,4,5') return 'De lunes a sábado';
+  if (j === '5,6') return 'Fines de semana';
+  if (d.length === 1) return 'Los ' + DAYS_LONG[d[0]] + (d[0] >= 5 ? 's' : '');
+  return d.map(i => DAYS_LONG[i].slice(0, 3)).join(', ');
+}
 const fmt = (n, d = 0) => Number(n || 0).toLocaleString('es', { maximumFractionDigits: d, minimumFractionDigits: d });
 const clamp01 = (x) => Math.max(0, Math.min(1, x || 0));
 let cur = todayKey();
@@ -140,7 +151,7 @@ function go(v) {
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.dataset.view === v));
   const tab = { agua: 'hoy', pasos: 'hoy', perfil: '' }[v] ?? v;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.go === tab));
-  window.scrollTo({ top: 0 });
+  window.scrollTo({ top: 0, left: 0 }); document.documentElement.scrollLeft = 0;
   render();
 }
 document.addEventListener('click', (e) => {
@@ -199,7 +210,8 @@ document.addEventListener('pointerdown', (e) => {
 function renderTop() {
   const h = new Date().getHours();
   const saludo = h < 12 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
-  $('hello').textContent = db.profile.name ? `${saludo}, ${db.profile.name}` : saludo;
+  const first = (db.profile.name || '').trim().split(/\s+/)[0];
+  $('hello').textContent = first ? `${saludo}, ${first}` : saludo;
   const d = fromKey(cur);
   $('topDate').textContent = d.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' });
   const diff = Math.round((fromKey(todayKey()) - d) / 864e5);
@@ -234,7 +246,7 @@ function renderHoy() {
   animateNum($('tProt'), protOf(d)); $('tProtGoal').textContent = g.prot;
   $('mProt').style.width = r.p * 100 + '%';
   const left = g.prot - protOf(d);
-  $('tProtLeft').textContent = left > 0 ? `Faltan ${left} g` : 'Meta cumplida';
+  $('tProtLeft').textContent = left > 0 ? `Faltan ${Math.round(left)} g` : 'Meta cumplida ✓';
   animateNum($('tSteps'), d.steps);
   $('mSteps').style.width = r.s * 100 + '%';
   $('tStepsInfo').textContent = `${fmt(kmOf(d.steps), 1)} km · ${fmt(kcalOf(d.steps))} kcal`;
@@ -244,7 +256,7 @@ function renderHoy() {
   $('tVol').textContent = volOf(d) ? `${fmt(volOf(d))} kg movidos` : '';
 
   const sh = shakesFor(cur);
-  $('todayShakes').innerHTML = sh.length ? sh.map(shakeItem).join('') : empty('shaker', 'No tienes batidos para este día. Créalos en Nutrición.');
+  $('todayShakes').innerHTML = sh.length ? sh.map(shakeItem).join('') : empty('shaker', 'No hay batidos para hoy. Créalos en Nutrición.');
   bindShakeChecks($('todayShakes'));
 
   // semana
@@ -260,7 +272,7 @@ function renderHoy() {
 }
 $('gymToggle').onclick = () => {
   const d = day(); d.gym = !d.gym; save(); vibrate(20);
-  if (d.gym) { toast('Día de gym registrado 💪 Meta de agua +0,5 L'); confetti(['#c6ff3d', '#ffffff', '#9be020']); }
+  if (d.gym) { toast('¡Bien! Día de gym registrado 💪'); confetti(['#c6ff3d', '#ffffff', '#9be020']); }
   render();
 };
 function addWater(ml) {
@@ -289,7 +301,7 @@ function renderAgua() {
   const h = new Date().getHours(), hrsLeft = Math.max(1, 22 - h);
   $('waterWhy').innerHTML = `Base ${fmt(w * 0.035, 1)} L (35 ml × ${w} kg)` + (d.gym ? ' + 0,5 L por entrenar' : '') +
     (d.steps > 8000 ? ' + extra por pasos' : '') +
-    (left > 0 && cur === todayKey() ? `<br>Te faltan ${fmt(left, 1)} L: unos ${fmt(left * 1000 / hrsLeft)} ml por hora hasta las 22:00.` : '');
+    (left > 0 && cur === todayKey() ? (h < 22 ? `<br>Te faltan ${fmt(left, 1)} L: unos ${fmt(Math.round(left * 1000 / hrsLeft / 50) * 50)} ml por hora hasta las 22:00.` : `<br>Te faltaron ${fmt(left, 1)} L. Mañana empieza temprano con un vaso al despertar.`) : '');
 }
 
 /* ================= PASOS ================= */
@@ -332,7 +344,7 @@ $('stepLive').onclick = async () => {
   if (live) { window.removeEventListener('devicemotion', onMotion); live = false; save(); render(); toast('Conteo detenido'); return; }
   try { if (typeof DeviceMotionEvent?.requestPermission === 'function') await DeviceMotionEvent.requestPermission(); } catch (e) {}
   cur = todayKey();
-  window.addEventListener('devicemotion', onMotion); live = true; render(); toast('Contando pasos… lleva el móvil contigo');
+  window.addEventListener('devicemotion', onMotion); live = true; render(); toast('Contando pasos… lleva el celular contigo');
 };
 
 /* ================= GYM ================= */
@@ -346,7 +358,7 @@ function renderGym() {
   $('exList').innerHTML = d.ex.length ? d.ex.map(x => `
     <div class="item"><div class="ic">🏋️</div><div class="t"><b>${esc(x.m)}</b>
     <span>${x.at || ''} · ${x.min} min${x.sets ? ` · ${x.sets}×${x.reps || 0}` : ''}${x.kg ? ` · ${fmt(x.kg, 1)} kg` : ''}</span></div>
-    <button class="x" data-del="${x.id}">×</button></div>`).join('') : empty('dumbbell', 'Aún no registras ejercicios este día. Usa el cronómetro o toca + Añadir.');
+    <button class="x" data-del="${x.id}">×</button></div>`).join('') : empty('dumbbell', 'Aún no hay ejercicios este día. Empieza una rutina, usa el cronómetro o toca + Añadir.');
   $('exList').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { d.ex = d.ex.filter(x => x.id !== b.dataset.del); save(); render(); });
   const series = d.ex.reduce((a, x) => a + (+x.sets || 0), 0);
   $('exTotals').innerHTML = d.ex.length ? `<div><b>${minOf(d)}</b><span>minutos</span></div><div><b>${series}</b><span>series</span></div><div><b>${fmt(volOf(d))}</b><span>kg volumen</span></div>` : '';
@@ -377,12 +389,12 @@ function exSheet(pre = {}) {
     sel.onchange = () => { b.querySelector('#exNewW').style.display = sel.value === '__new' ? '' : 'none'; };
     b.querySelector('#exOk').onclick = () => {
       let m = sel.value;
-      if (m === '__new') { m = b.querySelector('#exNew').value.trim(); if (!m) return toast('Escribe el nombre'); if (!db.machines.includes(m)) db.machines.push(m); }
+      if (m === '__new') { m = b.querySelector('#exNew').value.trim(); if (!m) return toast('Escribe el nombre de la máquina'); if (!db.machines.includes(m)) db.machines.push(m); }
       const min = Math.max(0, Math.round(+b.querySelector('#exMin').value || 0));
       const d = day(), before = prMap();
       d.ex.push({ id: uid(), m, min, at: b.querySelector('#exAt').value, sets: Math.max(0, Math.round(+b.querySelector('#exSets').value || 0)), reps: Math.max(0, Math.round(+b.querySelector('#exReps').value || 0)), kg: Math.max(0, parseFloat(String(b.querySelector('#exKg').value).replace(',', '.')) || 0) });
       d.ex.sort((a, c) => (a.at || '').localeCompare(c.at || ''));
-      if (!d.gym) { d.gym = true; toast('Ejercicio guardado · día de gym marcado'); } else toast('Ejercicio guardado');
+      if (!d.gym) { d.gym = true; toast('Ejercicio guardado y día de gym marcado'); } else toast('Ejercicio guardado');
       save(); closeSheet(); render(); vibrate(15);
       const news = newPRs(before); if (news.length) { confetti(['#ffd166', '#c6ff3d', '#ffffff']); toast(`🏆 ¡Nuevo récord en ${news[0]}!`); }
       checkBadges();
@@ -424,9 +436,9 @@ function renderNutri() {
   const d = day(), g = goals(), p = protOf(d);
   animateNum($('nProt'), p); $('nProtGoal').textContent = g.prot;
   $('nmProt').style.width = clamp01(p / g.prot) * 100 + '%';
-  const left = g.prot - p, meals = Math.max(1, 4 - d.prot.length);
+  const left = Math.round(g.prot - p), meals = Math.max(1, 4 - d.prot.length);
   $('nProtTip').textContent = left > 0
-    ? `${PROT_FACTOR[db.profile.goal]} g por kg (${db.profile.goal}). Faltan ${left} g ≈ ${Math.ceil(left / meals)} g en cada una de tus próximas ${meals} comidas.`
+    ? `Tu meta: ${fmt(PROT_FACTOR[db.profile.goal], 1)} g por kilo para ${GOAL_TXT[db.profile.goal]}. Te faltan ${left} g: unos ${Math.ceil(left / meals)} g en ${meals === 1 ? 'tu próxima comida' : `cada una de tus próximas ${meals} comidas`}.`
     : '¡Meta de proteína cumplida! 🎯';
   $('protList').innerHTML = d.prot.length ? d.prot.slice().reverse().map(x => `<div class="item"><div class="ic">${x.shake ? '🥤' : '🍗'}</div><div class="t"><b>${esc(x.n)}</b><span>${x.at || ''}${x.kcal ? ' · ' + fmt(x.kcal) + ' kcal' : ''}</span></div><b>${fmt(x.g, x.g % 1 ? 1 : 0)} g</b><button class="x" data-del="${x.id}">×</button></div>`).join('') : '';
   $('protList').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
@@ -436,7 +448,7 @@ function renderNutri() {
 
   $('shakePlan').innerHTML = db.plan.length ? db.plan.slice().sort((a, b) => a.time.localeCompare(b.time)).map(s => `
     <div class="item"><div class="ic">🥤</div><div class="t"><b>${esc(s.name)} · ${s.g} g</b>
-    <span>${s.time} · ${s.days.length === 7 ? 'todos los días' : s.days.map(i => DAYS_LONG[i].slice(0, 3)).join(', ')}</span></div>
+    <span>${s.time} · ${daysLabel(s.days)}</span></div>
     <button class="x" data-edit="${s.id}">✎</button></div>`).join('') : empty('shaker', 'Aún no tienes batidos en tu plan.');
   $('shakePlan').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => shakeSheet(db.plan.find(s => s.id === b.dataset.edit)));
   renderKcal();
@@ -468,7 +480,7 @@ function shakeSheet(s) {
       const days = [...b.querySelectorAll('[data-d].on')].map(x => +x.dataset.d); if (!days.length) return toast('Elige al menos un día');
       const obj = { id: e.id || uid(), name, g: Math.max(0, Math.min(300, +b.querySelector('#sG').value || 0)), time: b.querySelector('#sT').value || '08:00', days };
       if (s) Object.assign(s, obj); else db.plan.push(obj);
-      save(); closeSheet(); render(); scheduleReminders(); toast('Plan guardado');
+      save(); closeSheet(); render(); scheduleReminders(); toast('Batido guardado');
     };
     const del = b.querySelector('#sDel');
     if (del) del.onclick = () => { db.plan = db.plan.filter(x => x.id !== s.id); save(); closeSheet(); render(); scheduleReminders(); };
@@ -553,7 +565,7 @@ function overload() {
     if (s.length < 2) continue;
     const last = s[s.length - 1], prev = s[s.length - 2], first = s[0];
     const gain = (last.kg - first.kg) / first.kg * 100;
-    if (last.kg === prev.kg && last.reps >= 10) out.push({ t: 'good', h: `${m}: toca subir peso`, b: `Hiciste ${last.reps} reps con ${fmt(last.kg, 1)} kg dos sesiones seguidas. Prueba ${fmt(Math.round(last.kg * 1.05 * 2) / 2, 1)} kg (+5 %) y baja a 8 reps.` });
+    if (last.kg === prev.kg && last.reps >= 10) out.push({ t: 'good', h: `${m}: toca subir peso`, b: `Hiciste ${last.reps} repeticiones con ${fmt(last.kg, 1)} kg dos sesiones seguidas. Prueba ${fmt(Math.round(last.kg * 1.05 * 2) / 2, 1)} kg (+5 %) y baja a 8 repeticiones.` });
     else if (last.kg < prev.kg) out.push({ t: 'warn', h: `${m}: bajaste carga`, b: `De ${fmt(prev.kg, 1)} a ${fmt(last.kg, 1)} kg. Si no fue a propósito, revisa descanso y proteína.` });
     else if (s.length >= 3) out.push({ t: 'good', h: `${m}: ${gain >= 0 ? '+' : ''}${fmt(gain, 1)} % de fuerza`, b: `De ${fmt(first.kg, 1)} kg (${first.k.slice(5)}) a ${fmt(last.kg, 1)} kg en ${s.length} sesiones.` });
   }
@@ -562,7 +574,7 @@ function overload() {
 function suggestions() {
   const p = db.profile, g = goals(todayKey()), r = recent(7), t = trend(), out = [];
   const lastW = db.weights[db.weights.length - 1];
-  if (!lastW || daysAgo(lastW.d) > 7) out.push({ t: 'warn', h: 'Regístrate el peso', b: lastW ? `Tu último pesaje fue hace ${daysAgo(lastW.d)} días. Sin pesajes no puedo medir tu progreso.` : 'Registra tu peso arriba. Con 3 pesajes en una semana calculo tu tendencia real.' });
+  if (!lastW || daysAgo(lastW.d) > 7) out.push({ t: 'warn', h: 'Registra tu peso', b: lastW ? `Tu último pesaje fue hace ${daysAgo(lastW.d)} días. Sin pesajes no se puede medir tu progreso.` : 'Regístralo arriba. Con 3 pesajes en una semana se calcula tu tendencia real.' });
   if (t) {
     const [lo, hi] = RATE[p.goal], pct = t.pct;
     const ok = pct >= lo && pct <= hi;
@@ -575,9 +587,9 @@ function suggestions() {
     if (r.protOk < r.days * 0.7) out.push({ t: 'warn', h: 'Te falta proteína', b: `Promedio ${fmt(r.prot)} g/día frente a ${g.prot} g. Cumpliste ${r.protOk} de ${r.days} días. Un batido extra de ${Math.max(20, Math.round((g.prot - r.prot) / 5) * 5)} g lo cubre.` });
     else out.push({ t: 'good', h: 'Proteína bien cubierta', b: `Cumpliste ${r.protOk} de ${r.days} días (promedio ${fmt(r.prot)} g).` });
     if (r.waterOk < r.days * 0.7) out.push({ t: 'warn', h: 'Bebe más agua', b: `Promedio ${fmt(r.water, 1)} L/día frente a ${fmt(g.water, 1)} L. Lleva una botella de 750 ml y rellénala ${Math.ceil(g.water / 0.75)} veces.` });
-    if (r.steps < p.stepGoal * 0.8) out.push({ t: 'warn', h: 'Muévete un poco más', b: `Promedio ${fmt(r.steps)} pasos frente a ${fmt(p.stepGoal)}. Un paseo de 20 min suma unos 2.000 pasos.` });
+    if (r.steps < p.stepGoal * 0.8) out.push({ t: 'warn', h: 'Muévete un poco más', b: `Promedio ${fmt(r.steps)} pasos frente a ${fmt(p.stepGoal)}. Un paseo de 20 minutos suma unos 2.000 pasos.` });
   }
-  if (r.gym < p.gymDays) out.push({ t: r.gym ? 'warn' : 'bad', h: `${r.gym} de ${p.gymDays} días de gym esta última semana`, b: r.gym ? `Te faltan ${p.gymDays - r.gym} para tu meta. La constancia es lo que más resultados da.` : 'Esta semana aún no entrenas. Aunque sean 30 min, ve hoy.' });
+  if (r.gym < p.gymDays) out.push({ t: r.gym ? 'warn' : 'bad', h: `${r.gym} de ${p.gymDays} días de gym esta última semana`, b: r.gym ? `Te faltan ${p.gymDays - r.gym} para tu meta. La constancia es lo que más resultados da.` : 'Llevas 7 días sin entrenar. Aunque sean 30 minutos, ve hoy.' });
   else out.push({ t: 'good', h: 'Cumpliste tus días de gym', b: `${r.gym} días y ${r.min} minutos en los últimos 7 días.` });
   return out.concat(overload());
 }
@@ -642,7 +654,7 @@ const aiKey = () => { try { return localStorage.getItem('forma.aikey') || ''; } 
 function aiStatus() {
   $('aiBox').style.display = aiKey() ? '' : 'none';
   $('aiKeyBtn').textContent = aiKey() ? 'Clave' : 'Activar';
-  $('aiStatus').textContent = aiKey() ? 'Claude analiza tus datos reales y te da un plan. Cada consulta usa tu cuenta de Anthropic.' : 'No hace falta: todo lo de arriba funciona sin IA. Si algún día quieres un análisis escrito por Claude, toca "Activar" y pega una clave de Anthropic.'; }
+  $('aiStatus').textContent = aiKey() ? 'Claude analiza tus datos reales y te da un plan. Cada consulta usa tu cuenta de Anthropic.' : 'No hace falta: todo lo de arriba funciona sin IA. Si quieres un análisis escrito por Claude, toca "Activar" y pega una clave de Anthropic.'; }
 $('aiKeyBtn').onclick = () => {
   openSheet(`<h3>Clave de Anthropic</h3><div class="sub">Se guarda solo en este celular. Créala en console.anthropic.com → API Keys.</div>
     <label class="field"><span>Clave</span><input class="input" id="kIn" type="password" placeholder="sk-ant-…" value="${esc(aiKey())}"></label>
@@ -765,9 +777,9 @@ function renderPerfil() {
     <div><span>Calorías diarias (${GOAL_TXT[p.goal]})</span><b>${fmt(energy().target)} kcal</b></div>`;
   renderNt(); renderLook();
 }
-const bindNum = (id, f, min, max) => $(id).addEventListener('change', () => { const v = +$(id).value; if (v >= min && v <= max) { db.profile[f] = v; save(); render(); } else { toast('Valor no válido'); renderPerfil(); } });
+const bindNum = (id, f, min, max) => $(id).addEventListener('change', () => { const v = +$(id).value; if (v >= min && v <= max) { db.profile[f] = v; save(); render(); } else { toast('Ese valor no es válido'); renderPerfil(); } });
 $('pfName').addEventListener('input', () => { db.profile.name = $('pfName').value.trim(); save(); renderTop(); });
-$('pfWeight').addEventListener('change', () => { const v = parseFloat(String($('pfWeight').value).replace(',', '.')); if (v >= 30 && v <= 300) { logWeight(Math.round(v * 10) / 10); render(); } else { toast('Valor no válido'); renderPerfil(); } });
+$('pfWeight').addEventListener('change', () => { const v = parseFloat(String($('pfWeight').value).replace(',', '.')); if (v >= 30 && v <= 300) { logWeight(Math.round(v * 10) / 10); render(); } else { toast('Ese valor no es válido'); renderPerfil(); } });
 bindNum('pfAge', 'age', 12, 100);
 document.querySelectorAll('#pfSex button').forEach(b => b.onclick = () => { db.profile.sex = b.dataset.v; save(); render(); }); bindNum('pfHeight', 'height', 120, 230);
 bindNum('pfSteps', 'stepGoal', 1000, 50000); bindNum('pfDays', 'gymDays', 1, 7);
@@ -807,7 +819,7 @@ async function ntStatus() {
   const el = $('ntStatus'); if (!el) return;
   if (!isApp()) { el.textContent = 'Los recordatorios funcionan en la app instalada.'; return; }
   await ready; const ln = LN(); if (!ln) { el.textContent = 'No disponible en este dispositivo.'; return; }
-  ln.hasPermission(ok => { el.textContent = ok ? 'Llegan aunque la app esté cerrada. Android puede retrasarlos unos minutos para ahorrar batería.' : 'Falta el permiso de notificaciones: activa un recordatorio para pedirlo.'; });
+  ln.hasPermission(ok => { el.textContent = ok ? 'Llegan aunque la app esté cerrada. Android puede retrasarlos unos minutos para ahorrar batería.' : 'Falta el permiso de notificaciones. Activa un recordatorio y te lo pedirá.'; });
 }
 function renderNt() {
   document.querySelectorAll('#ntToggles .tg').forEach(t => t.querySelector('.switch').classList.toggle('on', !!db.settings.nt[t.dataset.nt]));
@@ -825,7 +837,7 @@ $('ntTest').onclick = async () => {
   if (!isApp()) return toast('Prueba disponible en la app instalada');
   await ready; const ln = LN(); if (!ln) return toast('Notificaciones no disponibles');
   ln.schedule({ id: 9999, title: 'Forma', text: 'Así se verán tus recordatorios ✅', androidChannelId: 'forma', androidChannelName: 'Recordatorios', trigger: { in: 3, unit: 'second' } });
-  toast('Llegará en 3 segundos');
+  toast('Te llegará en 3 segundos');
 };
 
 /* ---------- 2. Pasos desde Health Connect ---------- */
@@ -841,7 +853,7 @@ async function hcSync(silent) {
     }
     db.settings.hcLast = Date.now(); save();
     if (changed) { render(); checkBadges(); if (!silent) toast('Pasos actualizados desde Health Connect'); }
-    else if (!silent) toast('Pasos al día');
+    else if (!silent) toast('Tus pasos ya están al día');
   }, (e) => { if (!silent) toast('No se pudieron leer los pasos'); });
 }
 function renderHc() {
@@ -849,7 +861,7 @@ function renderHc() {
   if (db.settings.hc) {
     b.textContent = 'Actualizar pasos';
     el.textContent = `Conectado a Health Connect` + (db.settings.hcLast ? ` · última lectura ${new Date(db.settings.hcLast).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : '');
-  } else { b.textContent = 'Conectar Health Connect'; el.textContent = isApp() ? 'Lee tus pasos de Samsung Health, Google Fit o tu reloj, sin escribirlos.' : 'Disponible en la app instalada.'; }
+  } else { b.textContent = 'Conectar Health Connect'; el.textContent = isApp() ? 'Lee solos tus pasos de Samsung Health, Google Fit o tu reloj.' : 'Disponible en la app instalada.'; }
 }
 $('hcBtn').onclick = async () => {
   if (db.settings.hc) return hcSync(false);
@@ -858,7 +870,7 @@ $('hcBtn').onclick = async () => {
   h.isAvailable((ok) => {
     if (!ok) { toast('Instala Health Connect desde Play Store'); try { h.getHealthConnectFromStore(() => {}, () => {}); } catch (e) {} return; }
     h.requestAuthorization([{ read: ['steps'] }], () => { db.settings.hc = true; save(); renderHc(); hcSync(false); },
-      () => toast('Permiso denegado. Actívalo en Health Connect → Forma'));
+      () => toast('Sin permiso. Actívalo en Health Connect › Forma'));
   }, () => toast('Health Connect no está disponible'));
 };
 
@@ -878,15 +890,15 @@ function routineFor(k) { const w = wd(fromKey(k)); return db.routines.filter(r =
 function renderRoutines() {
   const today = routineFor(todayKey());
   if (db.workout) { $('routineToday').innerHTML = `<div class="today-r live"><div><span class="sub">Entreno en curso</span><b>${esc(db.workout.name)}</b><span class="sub">desde las ${new Date(db.workout.start).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span></div><button class="btn primary" id="wkResume">Continuar</button></div>`; $('wkResume').onclick = drawWorkout; }
-  else $('routineToday').innerHTML = today.length ? today.map(r => `<div class="today-r"><div><span class="sub">Hoy toca</span><b>${esc(r.name)}</b><span class="sub">${r.items.length} ejercicios</span></div><button class="btn primary" data-start="${r.id}">Empezar</button></div>`).join('') : '';
-  $('routineList').innerHTML = db.routines.length ? db.routines.map(r => `<div class="item"><div class="ic">📋</div><div class="t"><b>${esc(r.name)}</b><span>${r.days.length ? r.days.map(i => DAYS_LONG[i].slice(0, 3)).join(', ') : 'sin día'} · ${r.items.map(i => esc(i.m)).join(', ')}</span></div><button class="x" data-start="${r.id}" title="Empezar">▶</button><button class="x" data-redit="${r.id}">✎</button></div>`).join('') : empty('dumbbell', 'Crea tu rutina, por ejemplo "Pecho y tríceps" los lunes.');
+  else $('routineToday').innerHTML = today.length ? today.map(r => `<div class="today-r"><div><span class="sub">Hoy toca</span><b>${esc(r.name)}</b><span class="sub">${r.items.length} ejercicio${r.items.length === 1 ? '' : 's'} · ${r.items.reduce((a, i) => a + i.sets, 0)} series</span></div><button class="btn primary" data-start="${r.id}">Empezar</button></div>`).join('') : '';
+  $('routineList').innerHTML = db.routines.length ? db.routines.map(r => `<div class="item"><div class="ic">📋</div><div class="t"><b>${esc(r.name)}</b><span>${daysLabel(r.days)} · ${r.items.length} ejercicio${r.items.length === 1 ? '' : 's'}</span></div><button class="x" data-start="${r.id}" title="Empezar">▶</button><button class="x" data-redit="${r.id}">✎</button></div>`).join('') : empty('dumbbell', 'Crea tu primera rutina, por ejemplo "Pecho y tríceps" los lunes.');
   document.querySelectorAll('[data-start]').forEach(b => b.onclick = () => startWorkout(db.routines.find(r => r.id === b.dataset.start)));
   document.querySelectorAll('[data-redit]').forEach(b => b.onclick = () => routineSheet(db.routines.find(r => r.id === b.dataset.redit)));
 }
 function routineSheet(r) {
   const e = r ? JSON.parse(JSON.stringify(r)) : { name: '', days: [], items: [] };
   const draw = (b) => {
-    b.querySelector('#rItems').innerHTML = e.items.length ? e.items.map((it, i) => `<div class="item"><div class="t"><b>${esc(it.m)}</b><span>${it.sets} series × ${it.reps} reps</span></div><button class="x" data-up="${i}">↑</button><button class="x" data-rm="${i}">×</button></div>`).join('') : '<div class="sub">Añade ejercicios abajo.</div>';
+    b.querySelector('#rItems').innerHTML = e.items.length ? e.items.map((it, i) => `<div class="item"><div class="t"><b>${esc(it.m)}</b><span>${it.sets} series × ${it.reps} reps</span></div><button class="x" data-up="${i}">↑</button><button class="x" data-rm="${i}">×</button></div>`).join('') : '<div class="sub">Todavía no hay ejercicios. Añádelos abajo.</div>';
     b.querySelectorAll('[data-rm]').forEach(x => x.onclick = () => { e.items.splice(+x.dataset.rm, 1); draw(b); });
     b.querySelectorAll('[data-up]').forEach(x => x.onclick = () => { const i = +x.dataset.up; if (i > 0) { [e.items[i - 1], e.items[i]] = [e.items[i], e.items[i - 1]]; draw(b); } });
   };
@@ -895,7 +907,7 @@ function routineSheet(r) {
     <div class="field"><span>Días</span><div class="days7" id="rD">${DAYS.map((x, i) => `<button data-d="${i}" class="${e.days.includes(i) ? 'on' : ''}">${x}</button>`).join('')}</div></div>
     <div class="field"><span>Ejercicios</span><div class="list" id="rItems"></div></div>
     <div class="addrow"><select class="input" id="rM">${machineOptions()}</select><input class="input" id="rS" type="number" inputmode="numeric" value="3" title="Series"><input class="input" id="rR" type="number" inputmode="numeric" value="10" title="Reps"><button class="btn ghost" id="rAdd">+</button></div>
-    <div class="sub">Máquina · series · repeticiones</div>
+    <div class="sub">Elige la máquina, las series y las repeticiones, y toca +.</div>
     <div class="btnrow">${r ? '<button class="btn danger" id="rDel">Eliminar</button>' : ''}<button class="btn primary" id="rOk">Guardar</button></div>`, (b) => {
     draw(b);
     b.querySelectorAll('#rD [data-d]').forEach(x => x.onclick = () => x.classList.toggle('on'));
@@ -926,9 +938,9 @@ function startWorkout(r) {
 function drawWorkout() {
   wk = db.workout; if (!wk) return closeSheet();
   const total = wk.items.reduce((a, i) => a + i.sets.length, 0), done = wk.items.reduce((a, i) => a + i.sets.filter(s => s.done).length, 0);
-  openSheet(`<h3>${esc(wk.name)}</h3><div class="sub">${done} de ${total} series · el peso viene de tu última sesión</div>
+  openSheet(`<h3>${esc(wk.name)}</h3><div class="sub">${done} de ${total} series hechas · el peso sugerido sale de tu última sesión</div>
     <div class="mini lg wkbar"><i style="width:${total ? done / total * 100 : 0}%"></i></div>
-    ${wk.items.map((it, i) => { const l = lastSet(it.m); return `<div class="wk-ex"><div class="row-h"><b>${esc(it.m)}</b><span class="sub">${l ? `Última: ${fmt(l.kg, 1)} kg × ${l.reps}` : 'Primera vez'}</span></div>
+    ${wk.items.map((it, i) => { const l = lastSet(it.m); return `<div class="wk-ex"><div class="row-h"><b>${esc(it.m)}</b><span class="sub">${l ? `Última vez: ${fmt(l.kg, 1)} kg × ${l.reps}` : 'Primera vez: elige un peso cómodo'}</span></div>
       ${it.sets.map((s, j) => `<div class="setrow ${s.done ? 'done' : ''}"><span class="n">${j + 1}</span><input class="input" type="number" inputmode="decimal" step="0.5" value="${s.kg || ''}" placeholder="kg" data-kg="${i}:${j}"><span class="sub">kg ×</span><input class="input" type="number" inputmode="numeric" value="${s.reps}" data-reps="${i}:${j}"><button class="check ${s.done ? 'on' : ''}" data-set="${i}:${j}">${s.done ? '✓' : ''}</button></div>`).join('')}</div>`; }).join('')}
     <div class="btnrow"><button class="btn danger" id="wkCancel">Descartar</button><button class="btn primary" id="wkEnd">Terminar entreno</button></div>`, (b) => {
     const at = (a) => a.split(':').map(Number);
@@ -948,7 +960,7 @@ function drawWorkout() {
 function finishWorkout() {
   const w = db.workout; if (!w) return;
   const doneItems = w.items.map(it => ({ m: it.m, sets: it.sets.filter(s => s.done) })).filter(it => it.sets.length);
-  if (!doneItems.length) return toast('Marca al menos una serie');
+  if (!doneItems.length) return toast('Marca al menos una serie como hecha');
   const mins = Math.max(1, Math.round((Date.now() - w.start) / 60000)), per = Math.max(1, Math.round(mins / doneItems.length));
   const d = day(todayKey()), at = nowHM(), before = prMap();
   for (const it of doneItems) {
@@ -984,7 +996,7 @@ function drawRest() {
 $('restPlus').onclick = () => { if (rest) { rest.end += 15000; rest.total += 15; drawRest(); ready.then(() => { const ln = LN(); ln && ln.schedule({ id: NT_ID.rest, title: '⏱️ Descanso terminado', text: 'Vamos con la siguiente serie', androidChannelId: 'forma_rest', trigger: { at: new Date(rest.end) } }); }); } };
 $('restStop').onclick = () => stopRest();
 document.querySelectorAll('[data-rest]').forEach(b => b.onclick = () => { db.settings.rest = +b.dataset.rest; save(); startRest(+b.dataset.rest); renderRestDef(); });
-function renderRestDef() { $('restDefTxt').textContent = `En rutinas: ${db.settings.rest || 90} s`; document.querySelectorAll('[data-rest]').forEach(b => b.classList.toggle('on', +b.dataset.rest === (db.settings.rest || 90))); }
+function renderRestDef() { $('restDefTxt').textContent = `Rutinas: ${(db.settings.rest || 90) >= 120 ? (db.settings.rest / 60) + ' min' : (db.settings.rest || 90) + ' s'}`; document.querySelectorAll('[data-rest]').forEach(b => b.classList.toggle('on', +b.dataset.rest === (db.settings.rest || 90))); }
 
 /* ---------- 7. Récords personales ---------- */
 const e1rm = (kg, reps) => reps <= 1 ? kg : kg * (1 + reps / 30); // fórmula de Epley
@@ -1009,7 +1021,7 @@ function newPRs(before) {
 }
 function renderPRs() {
   const m = Object.entries(prMap()).sort((a, b) => b[1].rm - a[1].rm);
-  $('prList').innerHTML = m.length ? m.slice(0, 8).map(([n, r]) => `<div class="item"><div class="ic">🏆</div><div class="t"><b>${esc(n)}</b><span>${fmt(r.kg, 1)} kg × ${r.reps} · ${r.k.slice(8)}/${r.k.slice(5, 7)}</span></div><div class="rm"><b>${fmt(r.rm, 1)}</b><span>kg 1RM</span></div></div>`).join('') : empty('chart', 'Registra ejercicios con peso para ver tus récords.');
+  $('prList').innerHTML = m.length ? m.slice(0, 8).map(([n, r]) => `<div class="item"><div class="ic">🏆</div><div class="t"><b>${esc(n)}</b><span>${fmt(r.kg, 1)} kg × ${r.reps} · ${r.k.slice(8)}/${r.k.slice(5, 7)}</span></div><div class="rm"><b>${fmt(r.rm, 1)}</b><span>kg 1RM</span></div></div>`).join('') : empty('chart', 'Registra ejercicios con peso y aquí verás tus mejores marcas.');
 }
 
 /* ---------- 5. Medidas corporales ---------- */
@@ -1026,7 +1038,7 @@ function renderMeas() {
     const last = pts[pts.length - 1], first = pts[0], dl = last.v - first.v;
     return `<div class="item"><div class="t"><b>${n}</b><span>${fmt(last.v, 1)} cm${pts.length > 1 ? ` · ${dl > 0 ? '+' : ''}${fmt(dl, 1)} cm desde ${first.d.slice(8)}/${first.d.slice(5, 7)}` : ''}</span></div>${spark(pts.slice(-12).map(p => p.v))}</div>`;
   }).join('');
-  $('measList').innerHTML = rows || empty('chart', 'Mide cintura, pecho, brazo, pierna y cadera cada 2–4 semanas.');
+  $('measList').innerHTML = rows || empty('chart', 'Mídete cada 2 a 4 semanas: a veces la báscula no cambia, pero la cintura sí.');
 }
 $('addMeas').onclick = () => {
   const last = db.measures[db.measures.length - 1] || {};
@@ -1058,7 +1070,7 @@ function shrink(file) {
 let photosCache = [];
 async function renderPhotos() {
   photosCache = await photoAll();
-  $('photoGrid').innerHTML = photosCache.length ? photosCache.slice().reverse().map(p => `<button class="ph" data-ph="${p.id}"><img src="${p.src}" alt=""><span>${p.d.slice(8)}/${p.d.slice(5, 7)}</span></button>`).join('') : empty('scale', 'Hazte una foto cada 2–4 semanas con la misma luz y postura. Se guardan solo en tu celular.');
+  $('photoGrid').innerHTML = photosCache.length ? photosCache.slice().reverse().map(p => `<button class="ph" data-ph="${p.id}"><img src="${p.src}" alt=""><span>${p.d.slice(8)}/${p.d.slice(5, 7)}</span></button>`).join('') : empty('scale', 'Hazte una foto cada 2 a 4 semanas, con la misma luz y postura. Se guardan solo en tu celular.');
   $('cmpRow').style.display = photosCache.length >= 2 ? '' : 'none';
   document.querySelectorAll('[data-ph]').forEach(b => b.onclick = () => {
     const p = photosCache.find(x => x.id === b.dataset.ph);
@@ -1149,7 +1161,7 @@ function renderKcal() {
   const bar = (n, v, gg, cl) => `<div class="mb"><div class="row-h"><span>${n}</span><span>${fmt(v)} / ${fmt(gg)} g</span></div><div class="mini"><i class="${cl}" style="width:${clamp01(v / gg) * 100}%"></i></div></div>`;
   $('macroBars').innerHTML = bar('Proteína', p, e.prot, 'p') + bar('Carbohidratos', c, e.carbs, 'c') + bar('Grasa', f, e.fat, 'f');
   const left = goal - now;
-  $('kTip').textContent = now === 0 ? 'Registra tus comidas con sus calorías para saber si vas bien. Usa los favoritos para hacerlo con un toque.' : left >= 0 ? `Te quedan ${fmt(left)} kcal hoy.` : `Te pasaste ${fmt(-left)} kcal de tu objetivo.`;
+  $('kTip').textContent = now === 0 ? 'Registra tus comidas para saber si vas bien. Con los favoritos se hace con un toque.' : left >= 0 ? `Te quedan ${fmt(left)} kcal hoy.` : `Te pasaste ${fmt(-left)} kcal de tu objetivo de hoy.`;
   $('favChips').innerHTML = db.favs.map((x, i) => `<button class="chip" data-fav="${i}">${esc(x.n)} · ${x.kcal ? fmt(x.kcal) + ' kcal' : fmt(x.g) + ' g'}</button>`).join('') || '<div class="sub">Sin favoritos.</div>';
   $('favChips').querySelectorAll('[data-fav]').forEach(b => b.onclick = () => {
     const x = db.favs[+b.dataset.fav]; day().prot.push({ id: uid(), n: x.n, g: x.g, kcal: x.kcal, c: x.c, f: x.f, at: nowHM() });
@@ -1169,14 +1181,14 @@ function foodSheet(pre = {}) {
     <div class="tg" id="fFav"><div><b>Guardar en favoritos</b><span>Para registrarlo con un toque</span></div><div class="switch"><i></i></div></div>
     <div class="btnrow"><button class="btn primary" id="fOk">Guardar</button></div>`, (b) => {
     const num = (id) => Math.max(0, parseFloat(String(b.querySelector(id).value).replace(',', '.')) || 0);
-    const upd = () => { const p = num('#fP'), c = num('#fC'), f = num('#fF'), k = num('#fK'); const est = p * 4 + c * 4 + f * 9; b.querySelector('#fCalc').textContent = !k && est ? `Si no pones calorías, se calculan con los macros: ${fmt(est)} kcal.` : ''; };
+    const upd = () => { const p = num('#fP'), c = num('#fC'), f = num('#fF'), k = num('#fK'); const est = p * 4 + c * 4 + f * 9; b.querySelector('#fCalc').textContent = !k && est ? `Si dejas las calorías vacías, se calculan con los macros: ${fmt(est)} kcal.` : ''; };
     b.querySelectorAll('input').forEach(i => i.oninput = upd);
     b.querySelector('#fFav').onclick = () => b.querySelector('#fFav .switch').classList.toggle('on');
     b.querySelector('#fOk').onclick = () => {
       const n = b.querySelector('#fN').value.trim() || 'Comida', p = num('#fP'), c = num('#fC'), f = num('#fF');
       let k = num('#fK'); if (!k) k = Math.round(p * 4 + c * 4 + f * 9);
-      if (!k && !p) return toast('Escribe calorías o macros');
-      if (k > 5000 || p > 300) return toast('Revisa los valores');
+      if (!k && !p) return toast('Escribe las calorías o los macros');
+      if (k > 5000 || p > 300) return toast('Revisa los números: parecen demasiado altos');
       day().prot.push({ id: uid(), n, g: p, kcal: k, c, f, at: nowHM() });
       if (b.querySelector('#fFav .switch').classList.contains('on') && !db.favs.some(x => x.n === n)) db.favs.push({ n, g: p, kcal: k, c, f });
       save(); closeSheet(); render(); checkBadges(); toast(`+${fmt(k)} kcal`);
@@ -1230,7 +1242,7 @@ $('exportBtn').onclick = async () => {
   const txt = JSON.stringify(db, null, 1), name = `forma-respaldo-${todayKey()}.json`;
   await ready; const sh = window.plugins?.socialsharing;
   const b64 = btoa(unescape(encodeURIComponent(txt)));
-  if (sh) sh.shareWithOptions({ files: [`df:${name};data:application/json;base64,${b64}`], chooserTitle: 'Guardar respaldo' }, () => toast('Elige dónde guardarlo (Drive, archivos…)'), () => toast('No se pudo exportar'));
+  if (sh) sh.shareWithOptions({ files: [`df:${name};data:application/json;base64,${b64}`], chooserTitle: 'Guardar respaldo' }, () => toast('Elige dónde guardarlo: Drive, Archivos…'), () => toast('No se pudo exportar'));
   else { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
 };
 $('importBtn').onclick = () => $('fileIn').click();
@@ -1325,5 +1337,5 @@ render(); runTick();
 ready.then(() => { scheduleReminders(); hcSync(true); widgetSync(); });
 document.addEventListener('resume', () => { hcSync(true); widgetSync(); render(); }, false);
 if (!db.onboarded) { db.onboarded = true; save(); setTimeout(() => { go('perfil'); toast('Completa tu perfil para calcular tus metas'); }, 300); }
-else { const lw = db.weights[db.weights.length - 1]; if (!lw || daysAgo(lw.d) >= 7) setTimeout(() => toast('Hace días que no te pesas · ve a Coach'), 1200); }
+else { const lw = db.weights[db.weights.length - 1]; if (!lw || daysAgo(lw.d) >= 7) setTimeout(() => toast('Hace más de una semana que no te pesas'), 1200); }
 })();

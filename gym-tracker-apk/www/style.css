@@ -400,3 +400,62 @@ html,body{overflow-x:hidden}
 .restpill.on{visibility:visible;pointer-events:auto;opacity:1;transition:transform .45s var(--ease),opacity .3s}
 :root[data-theme="light"] .switch.on{background:var(--a)}
 .wkbar i{background:var(--a)}
+
+/* ===== Ajustes de adaptación v2.1 ===== */
+.top>div:first-child{min-width:0;flex:1 1 auto}
+.top .topbtns{flex:none}
+.hello{overflow:hidden;text-overflow:ellipsis}
+/* títulos: hasta 2 líneas en vez de cortarse */
+.item .t b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3}
+.item .t span{display:block;overflow-wrap:anywhere}
+.row-h>.label,.row-h>b{min-width:0;overflow-wrap:anywhere}
+.row-h>button,.row-h>.seg{flex:none}
+.seg.sm button{flex:none}
+.chip{max-width:100%;white-space:normal;text-align:left;line-height:1.25}
+/* rutina de hoy: botón que no se aplasta */
+.today-r>div{min-width:0}
+.today-r b{overflow-wrap:anywhere;line-height:1.25}
+.today-r .btn{flex:none}
+.wk-ex .row-h{flex-wrap:wrap;gap:2px 10px}
+.wk-ex .row-h b{flex:1 1 140px}
+.setrow{grid-template-columns:20px minmax(0,1fr) auto minmax(0,64px) 34px}
+.addrow{grid-template-columns:minmax(0,1fr) 52px 52px 46px}
+.stats4 b,.stats3 b{overflow-wrap:anywhere}
+.calc div{gap:12px;align-items:center}
+.calc span{min-width:0}
+.calc b{text-align:right;flex:none;max-width:60%}
+.legend b{white-space:nowrap}
+.tg>div:first-child{min-width:0}
+@media (max-width:380px){
+  .today-r{flex-direction:column;align-items:stretch}
+  .today-r .btn{width:100%}
+  .row-h{flex-wrap:wrap}
+  .setrow{gap:6px}
+  .restpill{gap:7px}.restpill button{padding:7px 9px}
+  .badges{grid-template-columns:repeat(3,1fr)}
+  .photos{grid-template-columns:repeat(2,1fr)}
+  .stats4 b{font-size:17px}
+  .calc div{padding:11px 12px}
+  .calc span{font-size:12.5px}
+}
+@media (max-width:330px){
+  .legend{flex-wrap:wrap;justify-content:center}
+  .badges{grid-template-columns:repeat(2,1fr)}
+  .chips .chip{font-size:11.5px}
+}
+/* horizontal en teléfono: hojas más bajas y rutina compacta */
+@media (orientation:landscape) and (max-height:500px){
+  .sheet{max-height:94vh}
+  .restpill{bottom:64px}
+  .view.on{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+  .view>.hero,.view>.gymcard,.view>.grid2{grid-column:1/-1}
+  .view>.grid2{grid-template-columns:repeat(4,1fr)}
+  #app{max-width:none}
+}
+/* tabletas: las hojas inferiores centradas y más estrechas */
+@media (min-width:720px){
+  .sheet{max-width:620px;left:50%;right:auto;transform:translate(-50%,105%)}
+  .sheet.on{transform:translate(-50%,0)}
+  .photos{grid-template-columns:repeat(4,1fr)}
+  .restpill{bottom:calc(100px + env(safe-area-inset-bottom))}
+}

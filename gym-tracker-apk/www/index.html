@@ -97,11 +97,11 @@
         <div id="routineList" class="list"></div>
       </div>
       <div class="card">
-        <div class="row-h"><div class="label">Descanso entre series</div><div class="sub" id="restDefTxt"></div></div>
+        <div class="row-h"><div class="label">Descanso</div><div class="sub" id="restDefTxt"></div></div>
         <div class="chips center" id="restBtns"><button class="chip" data-rest="60">60 s</button><button class="chip" data-rest="90">90 s</button><button class="chip" data-rest="120">2 min</button><button class="chip" data-rest="180">3 min</button></div>
       </div>
       <div class="card timer-card">
-        <div class="label">Cronómetro de máquina</div>
+        <div class="label">Cronómetro por máquina</div>
         <div class="timer" id="timer">00:00</div>
         <select id="timerMachine" class="input"></select>
         <div class="btnrow">
@@ -110,12 +110,12 @@
         </div>
       </div>
       <div class="card">
-        <div class="row-h"><div class="label">Ejercicios del día</div><button class="btn sm primary" id="addEx">+ Añadir</button></div>
+        <div class="row-h"><div class="label">Ejercicios de hoy</div><button class="btn sm primary" id="addEx">+ Añadir</button></div>
         <div id="exList" class="list"></div>
         <div class="totals" id="exTotals"></div>
       </div>
       <div class="card">
-        <div class="row-h"><div class="label">Récords personales</div><div class="sub">1RM estimado</div></div>
+        <div class="row-h"><div class="label">Récords personales</div><div class="sub">Fuerza máxima estimada</div></div>
         <div id="prList" class="list"></div>
       </div>
       <div class="card">
@@ -138,7 +138,7 @@
         <div class="chips" id="favChips"></div>
       </div>
       <div class="card">
-        <div class="row-h"><div class="label">Proteína y comidas de hoy</div><button class="btn sm ghost" id="addProt">+ Solo proteína</button></div>
+        <div class="row-h"><div class="label">Comidas de hoy</div><button class="btn sm ghost" id="addProt">+ Proteína</button></div>
         <div class="bigline"><span id="nProt">0</span><small> / <span id="nProtGoal">0</span> g</small></div>
         <div class="mini lg"><i id="nmProt" class="p"></i></div>
         <div class="sub" id="nProtTip"></div>
@@ -146,7 +146,7 @@
       </div>
       <div class="card">
         <div class="row-h"><div class="label">Plan de batidos</div><button class="btn sm primary" id="addShake">+ Batido</button></div>
-        <div class="sub">Define qué batido tomas, a qué hora y qué días. Márcalo al tomarlo.</div>
+        <div class="sub">Elige qué batido tomas, a qué hora y qué días. Márcalo cuando lo tomes.</div>
         <div id="shakePlan" class="list"></div>
       </div>
     </section>
@@ -184,7 +184,7 @@
         </div>
         <div class="btnrow"><button class="btn ghost" id="hcBtn">Conectar Health Connect</button></div>
         <div class="sub" id="hcStatus"></div>
-        <div class="sub" id="stepNote">"Contar en vivo" usa el sensor del móvil con la app abierta. Con Health Connect los pasos de Samsung Health o Google Fit se leen solos.</div>
+        <div class="sub" id="stepNote">"Contar en vivo" usa el sensor del celular mientras la app está abierta. Con Health Connect, los pasos de Samsung Health o Google Fit se leen solos.</div>
       </div>
     </section>
 
@@ -195,7 +195,7 @@
         <div class="bigline"><span id="wNow">–</span><small> kg</small> <span class="delta" id="wDelta"></span></div>
         <div class="chart" id="wChart"></div>
         <div class="btnrow"><input class="input" id="wIn" type="number" inputmode="decimal" step="0.1" placeholder="Peso de hoy (kg)"><button class="btn primary" id="wSave" style="flex:none">Registrar</button></div>
-        <div class="sub">Pésate en ayunas, a la misma hora, 2–3 veces por semana. La tendencia vale más que un día suelto.</div>
+        <div class="sub">Pésate en ayunas, a la misma hora, 2 o 3 veces por semana. Importa la tendencia, no un día suelto.</div>
       </div>
       <div class="card">
         <div class="label">Análisis de tu progreso</div>
@@ -213,7 +213,7 @@
       <div class="card">
         <div class="row-h"><div class="label">Resumen</div><div class="seg sm" id="sumSeg"><button data-v="week" class="on">Semana</button><button data-v="month">Mes</button></div></div>
         <div class="stats4" id="sumStats"></div>
-        <div class="btnrow"><button class="btn ghost" id="sumShare">Compartir como imagen</button></div>
+        <div class="btnrow"><button class="btn ghost" id="sumShare">Compartir imagen</button></div>
       </div>
       <div class="card">
         <div class="row-h"><div class="label">Medidas corporales</div><button class="btn sm primary" id="addMeas">+ Medir</button></div>
@@ -223,7 +223,7 @@
         <div class="row-h"><div class="label">Fotos de progreso</div><button class="btn sm primary" id="addPhoto">+ Foto</button></div>
         <input type="file" id="photoIn" accept="image/*" hidden>
         <div class="photos" id="photoGrid"></div>
-        <div class="btnrow" id="cmpRow" style="display:none"><button class="btn ghost" id="cmpBtn">Comparar antes / después</button></div>
+        <div class="btnrow" id="cmpRow" style="display:none"><button class="btn ghost" id="cmpBtn">Comparar antes y después</button></div>
       </div>
       <div class="card">
         <div class="row-h"><div class="label">Logros</div><div class="sub" id="badgeCount"></div></div>
@@ -233,7 +233,7 @@
         <div class="row-h"><div class="label">Coach con IA · opcional</div><button class="link" id="aiKeyBtn">Activar</button></div>
         <div class="sub" id="aiStatus"></div>
         <div id="aiBox"><div class="btnrow"><button class="btn primary" id="aiAnalyze">Analizar mi progreso</button></div>
-        <div class="btnrow"><input class="input" id="aiQ" placeholder="Pregúntale algo a tu coach…"><button class="btn ghost" id="aiAsk" style="flex:none">Enviar</button></div>
+        <div class="btnrow"><input class="input" id="aiQ" placeholder="Pregúntale a tu coach…"><button class="btn ghost" id="aiAsk" style="flex:none">Enviar</button></div>
         <div id="aiOut" class="aiout"></div></div>
       </div>
     </section>
@@ -275,7 +275,7 @@
         </div>
         <div class="grid2 tight">
           <label class="field"><span>Meta de pasos</span><input class="input" id="pfSteps" type="number" inputmode="numeric"></label>
-          <label class="field"><span>Días de gym / semana</span><input class="input" id="pfDays" type="number" inputmode="numeric"></label>
+          <label class="field"><span>Días de gym por semana</span><input class="input" id="pfDays" type="number" inputmode="numeric"></label>
         </div>
       </div>
       <div class="card">
@@ -288,9 +288,9 @@
           <div class="tg" data-nt="shakes"><div><b>Batidos</b><span>A la hora de cada batido de tu plan</span></div><div class="switch"><i></i></div></div>
           <div class="tg" data-nt="water"><div><b>Agua</b><span>Cada 2 horas, de 10:00 a 20:00</span></div><div class="switch"><i></i></div></div>
           <div class="tg" data-nt="weigh"><div><b>Pesaje</b><span>Lunes y jueves a las 8:00</span></div><div class="switch"><i></i></div></div>
-          <div class="tg" data-nt="gym"><div><b>Entreno y racha</b><span>Cada día a la hora que elijas</span></div><div class="switch"><i></i></div></div>
+          <div class="tg" data-nt="gym"><div><b>Entreno</b><span>Cada día, a la hora que elijas</span></div><div class="switch"><i></i></div></div>
         </div>
-        <div class="field" id="ntGymTimeW"><span>Hora del recordatorio de entreno</span><input class="input" type="time" id="ntGymTime"></div>
+        <div class="field" id="ntGymTimeW"><span>Hora del recordatorio</span><input class="input" type="time" id="ntGymTime"></div>
         <div class="sub" id="ntStatus"></div>
       </div>
       <div class="card">
@@ -300,7 +300,7 @@
       </div>
       <div class="card">
         <div class="label">Respaldo de datos</div>
-        <div class="sub">Guarda un archivo con todos tus datos (sin fotos) para pasarlos a otro celular.</div>
+        <div class="sub">Guarda un archivo con todos tus datos para pasarlos a otro celular o recuperarlos. Las fotos no se incluyen.</div>
         <input type="file" id="fileIn" accept=".json,application/json,text/plain" hidden>
         <div class="btnrow">
           <button class="btn ghost" id="exportBtn">Exportar archivo</button>
