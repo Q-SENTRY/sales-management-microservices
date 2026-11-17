@@ -494,3 +494,31 @@ button:disabled{opacity:.5}
 .wrow b{font-variant-numeric:tabular-nums}
 .wrow .x{color:var(--mu);font-size:18px;padding:2px 8px}
 .sheet{touch-action:pan-y;will-change:transform}
+/* ===== Figuras de ejercicio ===== */
+.fig{display:block;overflow:visible}
+.fig .bd{fill:none;stroke:var(--tx);stroke-width:6.5;stroke-linecap:round;stroke-linejoin:round}
+.fig .hd{fill:var(--tx)}
+.fig .eq{fill:none;stroke:var(--a);stroke-width:5;stroke-linecap:round}
+.fig .pl{fill:var(--a)}
+.fig .eq2{fill:none;stroke:#4a4a52;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.fig .cb{fill:none;stroke:#6a6a72;stroke-width:2;stroke-dasharray:3 3}
+.fig .fl{fill:none;stroke:#2e2e33;stroke-width:4;stroke-linecap:round}
+.fig .eqf{fill:#4a4a52}.fig .plf{fill:var(--a)}
+.fig .run-belt{stroke:var(--a);stroke-dasharray:10 8;animation:belt .5s linear infinite}
+@keyframes belt{to{stroke-dashoffset:-18}}
+:root[data-theme="light"] .fig .eq2{stroke:#b9b9b2}:root[data-theme="light"] .fig .fl{stroke:#dcdcd6}:root[data-theme="light"] .fig .eqf{fill:#c9c9c2}
+.figbox{display:flex;flex-direction:column;align-items:center;gap:2px}
+.figbox span{font-size:10.5px;font-weight:700;color:var(--a);letter-spacing:.04em;text-transform:uppercase;min-height:13px}
+.lifter{width:64px;height:56px;opacity:.45;transition:opacity .3s}
+.lifter .fig{width:100%;height:100%}
+.gymcard.on .lifter{opacity:1}
+.gymcard.on .bell{animation:none}
+.fic{background:var(--card2)!important;padding:3px}
+.fic .fig.sm{width:100%;height:100%}
+.fig.sm .bd{stroke-width:8}.fig.sm .hd{r:9}
+.fig.md{width:70px;height:62px;flex:none}
+.fig.xs{width:38px;height:34px;flex:none}
+.wk-ex .row-h{align-items:center}
+.today-r{gap:10px}
+.today-r>div{flex:1}
+@media (max-width:380px){.lifter{display:block;width:52px;height:46px}.today-r .fig.md{display:none}}

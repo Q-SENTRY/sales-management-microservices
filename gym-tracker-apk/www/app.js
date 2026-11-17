@@ -233,6 +233,71 @@ document.addEventListener('pointerdown', (e) => {
   b.appendChild(s); setTimeout(() => s.remove(), 600);
 }, { passive: true });
 
+
+/* ================= Figuras animadas por tipo de ejercicio ================= */
+// Detecta el tipo de ejercicio por el nombre de la máquina
+const CATS = [
+  ['run', /cinta|correr|trot|caminadora|run/i], ['bike', /bici|spinning|cicl/i], ['run', /el[ií]ptica|escaladora|stair/i],
+  ['row', /remo|row/i], ['pull', /jal[oó]n|dominad|pull|polea alta|espalda/i],
+  ['squat', /prensa|sentadilla|squat|pierna|cu[aá]dricep|femoral|zancada|glúte|glute|hip|gemel|pantorr|abductor|aductor|peso muerto/i],
+  ['bench', /pecho|banca|bench|aperturas|pec ?deck|fondos|press plano|press inclinado|contractor/i],
+  ['press', /hombro|militar|elevaci|deltoid|press arriba/i],
+  ['curl', /b[ií]cep|curl|tr[ií]cep|brazo|polea|martillo|antebrazo/i],
+  ['core', /abdom|crunch|plancha|core|oblicu|lumbar/i]
+];
+const CAT_TXT = { squat: 'Pierna', bench: 'Pecho', pull: 'Espalda', row: 'Remo', press: 'Hombro', curl: 'Brazos', core: 'Abdomen', run: 'Cardio', bike: 'Bici', gen: 'Fuerza' };
+const catOf = (m) => { for (const [c, re] of CATS) if (re.test(m || '')) return c; return 'gen'; };
+// Cada figura: piezas fijas + piezas que alternan entre dos posturas (a → b)
+const FIG = {
+  squat: { fixed: '<path class="fl" d="M18 99H102"/>',
+    parts: [['p', 'M60 30L60 58', 'M60 50L52 74', 'bd'], ['p', 'M60 58L58 78L60 98', 'M52 74L74 82L64 98', 'bd'], ['p', 'M60 33L48 31', 'M58 53L46 51', 'bd'],
+      ['p', 'M36 31L84 31', 'M34 51L82 51', 'eq'], ['c', '60,21', '58,42', 'hd'], ['c', '36,31', '34,51', 'pl'], ['c', '84,31', '82,51', 'pl']] },
+  bench: { fixed: '<path class="eq2" d="M24 70H96M34 70V96M86 70V96"/>',
+    parts: [['p', 'M34 63L82 63', 'M34 63L82 63', 'bd'], ['p', 'M82 63L94 80L94 98', 'M82 63L94 80L94 98', 'bd'], ['p', 'M56 63L57 46L56 28', 'M56 63L46 54L56 46', 'bd'],
+      ['c', '25,61', '25,61', 'hd'], ['c', '56,28', '56,46', 'pl']] },
+  pull: { fixed: '<path class="eq2" d="M60 0V8M44 98V80M76 98V80M38 80H82"/>',
+    parts: [['p', 'M60 0L60 14', 'M60 0L60 34', 'cb'], ['p', 'M24 14L96 14', 'M24 34L96 34', 'eq'], ['p', 'M60 50L42 32L36 14', 'M60 50L40 56L36 34', 'bd'], ['p', 'M60 50L78 32L84 14', 'M60 50L80 56L84 34', 'bd'],
+      ['p', 'M60 46L60 76', 'M60 46L60 76', 'bd'], ['p', 'M60 76L46 80L46 98', 'M60 76L46 80L46 98', 'bd'], ['p', 'M60 76L74 80L74 98', 'M60 76L74 80L74 98', 'bd'], ['c', '60,37', '60,37', 'hd']] },
+  row: { fixed: '<path class="fl" d="M14 92H106"/><path class="eq2" d="M100 50V92M30 80H58"/>',
+    parts: [['p', 'M42 48L46 78', 'M36 50L46 78', 'bd'], ['p', 'M46 78L76 82L92 84', 'M46 78L72 76L92 84', 'bd'], ['p', 'M43 54L68 62L84 64', 'M38 56L32 68L48 66', 'bd'],
+      ['p', 'M84 64L100 60', 'M48 66L100 60', 'cb'], ['c', '40,39', '33,41', 'hd'], ['c', '84,64', '48,66', 'pl']] },
+  press: { fixed: '<path class="fl" d="M24 99H96"/>',
+    parts: [['p', 'M60 40L60 72', 'M60 40L60 72', 'bd'], ['p', 'M60 72L50 98', 'M60 72L50 98', 'bd'], ['p', 'M60 72L70 98', 'M60 72L70 98', 'bd'],
+      ['p', 'M60 44L42 48L40 32', 'M60 44L44 26L42 10', 'bd'], ['p', 'M60 44L78 48L80 32', 'M60 44L76 26L78 10', 'bd'], ['p', 'M26 32L94 32', 'M28 10L92 10', 'eq'], ['c', '60,30', '60,30', 'hd']] },
+  curl: { fixed: '<path class="fl" d="M24 99H96"/>',
+    parts: [['p', 'M60 32L60 68', 'M60 32L60 68', 'bd'], ['p', 'M60 68L50 98', 'M60 68L50 98', 'bd'], ['p', 'M60 68L70 98', 'M60 68L70 98', 'bd'],
+      ['p', 'M60 36L48 54L48 72', 'M60 36L48 54L50 38', 'bd'], ['p', 'M60 36L72 54L72 72', 'M60 36L72 54L70 38', 'bd'], ['c', '60,22', '60,22', 'hd'], ['c', '48,74', '50,38', 'pl'], ['c', '72,74', '70,38', 'pl']] },
+  core: { fixed: '<path class="fl" d="M12 94H108"/>',
+    parts: [['p', 'M30 88L64 88', 'M40 72L64 88', 'bd'], ['p', 'M64 88L78 70L94 88', 'M64 88L78 70L94 88', 'bd'], ['p', 'M36 88L26 80', 'M44 74L38 64', 'bd'], ['c', '22,86', '36,64', 'hd']] },
+  run: { fixed: '<path class="fl run-belt" d="M10 99H110"/>',
+    parts: [['p', 'M60 30L57 58', 'M60 30L57 58', 'bd'], ['p', 'M57 58L70 76L64 96', 'M57 58L48 76L36 86', 'bd'], ['p', 'M57 58L48 76L36 86', 'M57 58L70 76L64 96', 'bd'],
+      ['p', 'M59 36L70 48L80 40', 'M59 36L48 48L42 60', 'bd'], ['p', 'M59 36L48 48L42 60', 'M59 36L70 48L80 40', 'bd'], ['c', '62,21', '62,21', 'hd']] },
+  bike: { fixed: '<circle class="eq2" cx="32" cy="80" r="15"/><circle class="eq2" cx="88" cy="80" r="15"/><path class="eq2" d="M32 80L54 58L80 58L88 80M54 58L62 80L80 58M50 56H60M80 58L84 46"/>',
+    parts: [['p', 'M55 56L72 34', 'M55 56L72 34', 'bd'], ['p', 'M70 38L84 48', 'M70 38L84 48', 'bd'], ['p', 'M55 56L70 68L62 86', 'M55 56L66 66L74 78', 'bd'], ['p', 'M55 56L66 66L74 78', 'M55 56L70 68L62 86', 'bd'], ['c', '76,26', '76,26', 'hd']] },
+  gen: { fixed: '', parts: [['r', '18,44,84,12', '18,44,84,12', 'eqf'], ['r', '22,26,16,48', '22,20,16,48', 'plf'], ['r', '82,26,16,48', '82,20,16,48', 'plf']] }
+};
+const SPL = 'calcMode="spline" keyTimes="0;0.5;1" keySplines=".45 0 .55 1;.45 0 .55 1"';
+function figure(cat, cls = '', animate = true) {
+  const f = FIG[cat] || FIG.gen, dur = cat === 'run' ? '0.7s' : cat === 'bike' ? '0.9s' : '1.8s', mv = animate && !reduceMotion;
+  const a = (attr, x, y) => mv && x !== y ? `<animate attributeName="${attr}" values="${x};${y};${x}" dur="${dur}" repeatCount="indefinite" ${SPL}/>` : '';
+  const parts = f.parts.map(([t, A, B, c]) => {
+    if (t === 'p') return `<path class="${c}" d="${A}">${a('d', A, B)}</path>`;
+    if (t === 'c') { const [x1, y1] = A.split(','), [x2, y2] = B.split(','); return `<circle class="${c}" cx="${x1}" cy="${y1}" r="${c === 'hd' ? 8 : 6}">${a('cx', x1, x2)}${a('cy', y1, y2)}</circle>`; }
+    const [x, y, w, h] = A.split(','), [, y2] = B.split(','); return `<rect class="${c}" x="${x}" y="${y}" width="${w}" height="${h}" rx="6">${a('y', y, y2)}</rect>`;
+  }).join('');
+  return `<svg class="fig fig-${cat} ${cls}" viewBox="0 0 120 104" aria-hidden="true">${f.fixed}${parts}</svg>`;
+}
+// Ejercicio "de hoy": el de más minutos registrado hoy, o el primero de la rutina que toca
+function todaysCat() {
+  const d = peek(cur);
+  if (d?.ex?.length) {
+    const by = {}; for (const x of d.ex) { const c = catOf(x.m); by[c] = (by[c] || 0) + (+x.min || 1); }
+    return Object.entries(by).sort((a, b) => b[1] - a[1])[0][0];
+  }
+  const r = db.routines && routineFor(cur)[0]; if (r?.items?.length) return catOf(r.items[0].m);
+  return 'gen';
+}
+
 /* ================= Encabezado y día ================= */
 function renderTop() {
   const h = new Date().getHours();
@@ -265,6 +330,9 @@ function renderHoy() {
   $('gymSwitch').classList.toggle('on', d.gym);
   $('gymToggle').classList.toggle('on', d.gym);
   $('gymState').textContent = d.gym ? 'Entrenaste ✓' : '¿Fuiste hoy?';
+  const tc = todaysCat();
+  if ($('gymFig').dataset.cat !== tc + d.gym) { $('gymFig').innerHTML = figure(tc, '', d.gym); $('gymFig').dataset.cat = tc + d.gym; }
+  $('gymFigTxt').textContent = tc === 'gen' ? '' : (d.gym ? CAT_TXT[tc] : 'Toca: ' + CAT_TXT[tc]);
   const wk = gymInWeek(weekStart(fromKey(cur))), st = weekStreak();
   $('streakTxt').innerHTML = `${wk} de ${db.profile.gymDays} días esta semana` + (st ? ` · <span class="flame">🔥</span> racha ${st} sem` : '');
 
@@ -279,7 +347,8 @@ function renderHoy() {
   $('tStepsInfo').textContent = `${fmt(kmOf(d.steps), 1)} km · ${fmt(kcalOf(d.steps))} kcal`;
   animateNum($('tMin'), minOf(d));
   const ms = [...new Set(d.ex.map(x => x.m))];
-  $('tMach').textContent = ms.length ? `${ms.length} máquina${ms.length > 1 ? 's' : ''}` : 'Sin máquinas';
+  const cats = [...new Set(d.ex.map(x => catOf(x.m)).filter(c => c !== 'gen'))].map(c => CAT_TXT[c]);
+  $('tMach').textContent = ms.length ? (cats.length ? cats.slice(0, 3).join(' · ') : `${ms.length} máquina${ms.length > 1 ? 's' : ''}`) : 'Sin máquinas';
   $('tVol').textContent = volOf(d) ? `${fmt(volOf(d))} kg movidos` : '';
 
   const sh = shakesFor(cur);
@@ -383,7 +452,7 @@ function renderGym() {
   const tm = $('timerMachine'), prev = tm.value;
   tm.innerHTML = machineOptions(db.timer?.m || prev);
   $('exList').innerHTML = d.ex.length ? d.ex.map(x => `
-    <div class="item tap" data-exedit="${x.id}"><div class="ic">🏋️</div><div class="t"><b>${esc(x.m)}</b>
+    <div class="item tap" data-exedit="${x.id}"><div class="ic fic">${figure(catOf(x.m), 'sm', false)}</div><div class="t"><b>${esc(x.m)}</b>
     <span>${x.at || ''} · ${x.min} min${x.sets ? ` · ${x.sets}×${x.reps || 0}` : ''}${x.kg ? ` · ${fmt(x.kg, 1)} kg` : ''}</span></div>
     <button class="x" data-del="${x.id}">×</button></div>`).join('') : empty('dumbbell', 'Aún no hay ejercicios este día. Empieza una rutina, usa el cronómetro o toca + Añadir.');
   $('exList').querySelectorAll('[data-del]').forEach(b => b.onclick = (e) => { e.stopPropagation(); const i = d.ex.findIndex(x => x.id === b.dataset.del); if (i >= 0) removeWithUndo(d.ex, i, 'Ejercicio borrado'); });
@@ -931,8 +1000,8 @@ function routineFor(k) { const w = wd(fromKey(k)); return db.routines.filter(r =
 function renderRoutines() {
   const today = routineFor(todayKey());
   if (db.workout) { $('routineToday').innerHTML = `<div class="today-r live"><div><span class="sub">Entreno en curso</span><b>${esc(db.workout.name)}</b><span class="sub">desde las ${new Date(db.workout.start).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span></div><button class="btn primary" id="wkResume">Continuar</button></div>`; $('wkResume').onclick = drawWorkout; }
-  else $('routineToday').innerHTML = today.length ? today.map(r => `<div class="today-r"><div><span class="sub">Hoy toca</span><b>${esc(r.name)}</b><span class="sub">${r.items.length} ejercicio${r.items.length === 1 ? '' : 's'} · ${r.items.reduce((a, i) => a + i.sets, 0)} series</span></div><button class="btn primary" data-start="${r.id}">Empezar</button></div>`).join('') : '';
-  $('routineList').innerHTML = db.routines.length ? db.routines.map(r => `<div class="item"><div class="ic">📋</div><div class="t"><b>${esc(r.name)}</b><span>${daysLabel(r.days)} · ${r.items.length} ejercicio${r.items.length === 1 ? '' : 's'}</span></div><button class="x" data-start="${r.id}" title="Empezar">▶</button><button class="x" data-redit="${r.id}">✎</button></div>`).join('') : empty('dumbbell', 'Crea tu primera rutina, por ejemplo "Pecho y tríceps" los lunes.');
+  else $('routineToday').innerHTML = today.length ? today.map(r => `<div class="today-r">${figure(catOf(r.items[0]?.m), 'md')}<div><span class="sub">Hoy toca</span><b>${esc(r.name)}</b><span class="sub">${r.items.length} ejercicio${r.items.length === 1 ? '' : 's'} · ${r.items.reduce((a, i) => a + i.sets, 0)} series</span></div><button class="btn primary" data-start="${r.id}">Empezar</button></div>`).join('') : '';
+  $('routineList').innerHTML = db.routines.length ? db.routines.map(r => `<div class="item"><div class="ic fic">${figure(catOf(r.items[0]?.m), 'sm', false)}</div><div class="t"><b>${esc(r.name)}</b><span>${daysLabel(r.days)} · ${r.items.length} ejercicio${r.items.length === 1 ? '' : 's'}</span></div><button class="x" data-start="${r.id}" title="Empezar">▶</button><button class="x" data-redit="${r.id}">✎</button></div>`).join('') : empty('dumbbell', 'Crea tu primera rutina, por ejemplo "Pecho y tríceps" los lunes.');
   document.querySelectorAll('[data-start]').forEach(b => b.onclick = () => startWorkout(db.routines.find(r => r.id === b.dataset.start)));
   document.querySelectorAll('[data-redit]').forEach(b => b.onclick = () => routineSheet(db.routines.find(r => r.id === b.dataset.redit)));
 }
@@ -981,7 +1050,7 @@ function drawWorkout() {
   const total = wk.items.reduce((a, i) => a + i.sets.length, 0), done = wk.items.reduce((a, i) => a + i.sets.filter(s => s.done).length, 0);
   openSheet(`<h3>${esc(wk.name)}</h3><div class="sub">${done} de ${total} series hechas · el peso sugerido sale de tu última sesión</div>
     <div class="mini lg wkbar"><i style="width:${total ? done / total * 100 : 0}%"></i></div>
-    ${wk.items.map((it, i) => { const l = lastSet(it.m); return `<div class="wk-ex"><div class="row-h"><b>${esc(it.m)}</b><span class="sub">${l ? `Última vez: ${fmt(l.kg, 1)} kg × ${l.reps}` : 'Primera vez: elige un peso cómodo'}</span></div>
+    ${wk.items.map((it, i) => { const l = lastSet(it.m); return `<div class="wk-ex"><div class="row-h">${figure(catOf(it.m), 'xs', it.sets.some(s => !s.done))}<b>${esc(it.m)}</b><span class="sub">${l ? `Última vez: ${fmt(l.kg, 1)} kg × ${l.reps}` : 'Primera vez: elige un peso cómodo'}</span></div>
       ${it.sets.map((s, j) => `<div class="setrow ${s.done ? 'done' : ''}"><span class="n">${j + 1}</span><input class="input" type="number" inputmode="decimal" step="0.5" value="${s.kg || ''}" placeholder="kg" data-kg="${i}:${j}"><span class="sub">kg ×</span><input class="input" type="number" inputmode="numeric" value="${s.reps}" data-reps="${i}:${j}"><button class="check ${s.done ? 'on' : ''}" data-set="${i}:${j}">${s.done ? '✓' : ''}</button></div>`).join('')}</div>`; }).join('')}
     <div class="btnrow"><button class="btn danger" id="wkCancel">Descartar</button><button class="btn primary" id="wkEnd">Terminar entreno</button></div>`, (b) => {
     const at = (a) => a.split(':').map(Number);
