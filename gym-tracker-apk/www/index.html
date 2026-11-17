@@ -127,7 +127,8 @@
     <!-- NUTRICIÓN -->
     <section class="view" data-view="nutri">
       <div class="card">
-        <div class="row-h"><div class="label">Calorías del día</div><button class="btn sm primary" id="addFood">+ Comida</button></div>
+        <div class="row-h"><div class="label">Calorías del día</div><div class="btnpair"><button class="btn sm ghost" id="foodPhoto">📷 Foto</button><button class="btn sm primary" id="addFood">+ Comida</button></div></div>
+        <input type="file" id="foodIn" accept="image/*" capture="environment" hidden>
         <div class="bigline"><span id="kNow">0</span><small> / <span id="kGoal">0</span> kcal</small></div>
         <div class="mini lg"><i id="kBar" class="k"></i></div>
         <div class="macros" id="macroBars"></div>

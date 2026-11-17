@@ -440,7 +440,7 @@ function renderNutri() {
   $('nProtTip').textContent = left > 0
     ? `Tu meta: ${fmt(PROT_FACTOR[db.profile.goal], 1)} g por kilo para ${GOAL_TXT[db.profile.goal]}. Te faltan ${left} g: unos ${Math.ceil(left / meals)} g en ${meals === 1 ? 'tu próxima comida' : `cada una de tus próximas ${meals} comidas`}.`
     : '¡Meta de proteína cumplida! 🎯';
-  $('protList').innerHTML = d.prot.length ? d.prot.slice().reverse().map(x => `<div class="item"><div class="ic">${x.shake ? '🥤' : '🍗'}</div><div class="t"><b>${esc(x.n)}</b><span>${x.at || ''}${x.kcal ? ' · ' + fmt(x.kcal) + ' kcal' : ''}</span></div><b>${fmt(x.g, x.g % 1 ? 1 : 0)} g</b><button class="x" data-del="${x.id}">×</button></div>`).join('') : '';
+  $('protList').innerHTML = d.prot.length ? d.prot.slice().reverse().map(x => `<div class="item"><div class="ic">${x.shake ? '🥤' : x.photo ? '📷' : '🍗'}</div><div class="t"><b>${esc(x.n)}</b><span>${x.at || ''}${x.kcal ? ' · ' + fmt(x.kcal) + ' kcal' : ''}</span></div><b>${fmt(x.g, x.g % 1 ? 1 : 0)} g</b><button class="x" data-del="${x.id}">×</button></div>`).join('') : '';
   $('protList').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
     const x = d.prot.find(y => y.id === b.dataset.del); if (x?.shake) delete d.shakes[x.shake];
     d.prot = d.prot.filter(y => y.id !== b.dataset.del); save(); render();
@@ -1212,6 +1212,99 @@ function realTdee() {
   for (let i = 1; i <= 28; i++) { const d = peek(dateAdd(todayKey(), -i)); const k = kcalDay(d); if (k >= 800) { kc += k; n++; } }
   if (n < 14) return { need: 14 - n };
   return { tdee: Math.round((kc / n - t.perWeek * 7700 / 7) / 10) * 10, days: n };
+}
+
+
+/* ---------- Foto de comida → calorías y macros (usa la IA opcional) ---------- */
+const FOOD_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['items', 'confianza', 'nota'],
+  properties: {
+    items: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['nombre', 'gramos', 'kcal', 'proteina', 'carbohidratos', 'grasa'],
+      properties: { nombre: { type: 'string' }, gramos: { type: 'number' }, kcal: { type: 'number' }, proteina: { type: 'number' }, carbohidratos: { type: 'number' }, grasa: { type: 'number' } } } },
+    confianza: { type: 'string', enum: ['alta', 'media', 'baja'] },
+    nota: { type: 'string' }
+  }
+};
+const FOOD_PROMPT = `Analiza la foto de esta comida. Identifica cada alimento visible y estima su porción en gramos según el tamaño del plato y los cubiertos.
+Para cada alimento da kcal, proteína, carbohidratos y grasa de ESA porción, usando valores nutricionales estándar (tipo USDA/BEDCA).
+Si no ves comida, devuelve items vacío y explícalo en "nota". En "nota" (máximo 2 frases, en español) di qué supusiste (aceite, salsas, cocción) y qué conviene corregir.
+Sé realista: es mejor una estimación honesta con confianza "baja" que inventar precisión.`;
+$('foodPhoto').onclick = () => {
+  if (!aiKey()) {
+    openSheet(`<h3>Foto de tu comida</h3><div class="sub">Para reconocer la comida de una foto hace falta IA (Claude), que es opcional. Activa tu clave de Anthropic y podrás fotografiar el plato: la app estima los gramos, las calorías y los macros, y tú los corriges antes de guardar.</div>
+      <div class="sub" style="margin-top:8px">Cada foto cuesta unos centavos en tu cuenta de Anthropic. Sin clave puedes seguir registrando comidas a mano o con favoritos.</div>
+      <div class="btnrow"><button class="btn ghost" id="fpNo">Ahora no</button><button class="btn primary" id="fpKey">Activar IA</button></div>`, (b) => {
+      b.querySelector('#fpNo').onclick = closeSheet;
+      b.querySelector('#fpKey').onclick = () => { closeSheet(); setTimeout(() => $('aiKeyBtn').click(), 350); };
+    });
+    return;
+  }
+  $('foodIn').click();
+};
+$('foodIn').onchange = async () => {
+  const f = $('foodIn').files[0]; $('foodIn').value = ''; if (!f) return;
+  let src; try { src = await shrink(f); } catch (e) { return toast('No se pudo leer la foto'); }
+  openSheet(`<h3>Analizando tu comida…</h3><img class="phbig food" src="${src}" alt=""><div class="scan"><i></i></div><div class="sub">Calculando porciones, calorías y macros.</div>`);
+  try {
+    const client = new window.Anthropic({ apiKey: aiKey(), dangerouslyAllowBrowser: true });
+    const res = await client.beta.messages.create({
+      model: 'claude-opus-5-5', max_tokens: 4000,
+      betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: FOOD_SCHEMA } },
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: src.split(',')[1] } },
+        { type: 'text', text: FOOD_PROMPT }
+      ] }]
+    });
+    if (res.stop_reason === 'refusal') throw new Error('refusal');
+    const txt = res.content.filter(b => b.type === 'text').map(b => b.text).join('');
+    const data = JSON.parse(txt);
+    showFoodResult(src, data);
+  } catch (err) {
+    const A = window.Anthropic;
+    const msg = err instanceof A.AuthenticationError ? 'La clave de IA no es válida. Revísala en Coach › Clave.'
+      : err instanceof A.RateLimitError ? 'Demasiadas consultas seguidas. Espera un minuto.'
+      : err instanceof A.APIError && err.status ? `La IA respondió con un error (${err.status}). Inténtalo de nuevo.`
+      : err instanceof SyntaxError || err.message === 'refusal' ? 'No se pudo analizar esta foto. Prueba con otra más cerca y con buena luz.'
+      : 'Sin conexión con la IA. Revisa tu internet.';
+    openSheet(`<h3>No se pudo analizar</h3><div class="sub">${esc(msg)}</div><div class="btnrow"><button class="btn ghost" id="frClose">Cerrar</button><button class="btn primary" id="frManual">Registrar a mano</button></div>`, (b) => {
+      b.querySelector('#frClose').onclick = closeSheet; b.querySelector('#frManual').onclick = () => foodSheet();
+    });
+  }
+};
+function showFoodResult(src, data) {
+  const items = (data.items || []).map(x => ({ n: String(x.nombre || 'Alimento').slice(0, 60), g0: Math.max(1, +x.gramos || 100), g: Math.max(1, Math.round(+x.gramos || 100)),
+    k: Math.max(0, +x.kcal || 0), p: Math.max(0, +x.proteina || 0), c: Math.max(0, +x.carbohidratos || 0), f: Math.max(0, +x.grasa || 0), on: true }));
+  if (!items.length) {
+    openSheet(`<h3>No se reconoció comida</h3><img class="phbig food" src="${src}" alt=""><div class="sub">${esc(data.nota || 'Prueba con una foto más cerca del plato.')}</div><div class="btnrow"><button class="btn primary" id="frManual">Registrar a mano</button></div>`, (b) => { b.querySelector('#frManual').onclick = () => foodSheet(); });
+    return;
+  }
+  const sc = (it) => it.g / it.g0;
+  const draw = (b) => {
+    let T = { k: 0, p: 0, c: 0, f: 0 };
+    b.querySelector('#frList').innerHTML = items.map((it, i) => { const s = sc(it); if (it.on) { T.k += it.k * s; T.p += it.p * s; T.c += it.c * s; T.f += it.f * s; }
+      return `<div class="fr ${it.on ? '' : 'off'}"><button class="check ${it.on ? 'on' : ''}" data-on="${i}">${it.on ? '✓' : ''}</button><div class="t"><b>${esc(it.n)}</b><span>${fmt(it.k * s)} kcal · P ${fmt(it.p * s, 1)} · C ${fmt(it.c * s, 1)} · G ${fmt(it.f * s, 1)}</span></div><label class="grams"><input class="input" type="number" inputmode="numeric" value="${it.g}" data-g="${i}"><span>g</span></label></div>`; }).join('');
+    b.querySelector('#frTot').innerHTML = `<div><b>${fmt(T.k)}</b><span>kcal</span></div><div><b>${fmt(T.p)}</b><span>proteína</span></div><div><b>${fmt(T.c)}</b><span>carbos</span></div><div><b>${fmt(T.f)}</b><span>grasa</span></div>`;
+    b.querySelectorAll('[data-on]').forEach(x => x.onclick = () => { items[+x.dataset.on].on = !items[+x.dataset.on].on; draw(b); });
+    b.querySelectorAll('[data-g]').forEach(x => x.onchange = () => { const v = Math.round(+x.value); if (v > 0 && v <= 3000) items[+x.dataset.g].g = v; draw(b); });
+  };
+  const conf = { alta: 'Confianza alta', media: 'Confianza media', baja: 'Confianza baja: revisa los gramos' }[data.confianza] || '';
+  openSheet(`<h3>Tu comida</h3><img class="phbig food" src="${src}" alt="">
+    <div class="sub"><span class="conf ${esc(data.confianza)}">${conf}</span> ${esc(data.nota || '')}</div>
+    <div class="list" id="frList" style="margin-top:10px"></div>
+    <div class="sub">Corrige los gramos si hace falta: las calorías y los macros se recalculan solos.</div>
+    <div class="frtot" id="frTot"></div>
+    <div class="btnrow"><button class="btn ghost" id="frCancel">Descartar</button><button class="btn primary" id="frOk">Guardar comida</button></div>`, (b) => {
+    draw(b);
+    b.querySelector('#frCancel').onclick = closeSheet;
+    b.querySelector('#frOk').onclick = () => {
+      const sel = items.filter(i => i.on); if (!sel.length) return toast('Marca al menos un alimento');
+      const d = day(), at = nowHM(); let kt = 0;
+      for (const it of sel) { const s = sc(it), k = Math.round(it.k * s); kt += k;
+        d.prot.push({ id: uid(), n: `${it.n} (${it.g} g)`, g: Math.round(it.p * s * 10) / 10, kcal: k, c: Math.round(it.c * s * 10) / 10, f: Math.round(it.f * s * 10) / 10, at, photo: true }); }
+      save(); closeSheet(); render(); checkBadges(); vibrate(20); toast(`Comida guardada: +${fmt(kt)} kcal`);
+    };
+  });
 }
 
 /* ---------- 11. Widget de pantalla de inicio ---------- */
