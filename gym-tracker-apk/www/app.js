@@ -9,6 +9,28 @@ let db = load() || {
   profile: { name: '', weight: 70, height: 170, goal: 'mantener', stepGoal: 8000, gymDays: 4 },
   days: {}, machines: DEF_MACHINES.slice(), plan: [], timer: null
 };
+// Completa campos que faltan (versiones antiguas o respaldos importados)
+function migrate(o) {
+  o = o && typeof o === 'object' ? o : {};
+  o.profile = Object.assign({ name: '', weight: 70, height: 170, goal: 'mantener', stepGoal: 8000, gymDays: 4, age: 25, sex: 'h' }, o.profile || {});
+  if (!['definir', 'mantener', 'volumen'].includes(o.profile.goal)) o.profile.goal = 'mantener';
+  for (const [f, lo, hi, def] of [['weight', 30, 300, 70], ['height', 120, 230, 170], ['stepGoal', 1000, 50000, 8000], ['gymDays', 1, 7, 4], ['age', 12, 100, 25]]) {
+    const v = +o.profile[f]; o.profile[f] = v >= lo && v <= hi ? v : def;
+  }
+  o.days = o.days && typeof o.days === 'object' ? o.days : {};
+  for (const d of Object.values(o.days)) {
+    d.gym = !!d.gym; d.water = Math.max(0, +d.water || 0); d.steps = Math.max(0, +d.steps || 0);
+    d.prot = Array.isArray(d.prot) ? d.prot : []; d.ex = Array.isArray(d.ex) ? d.ex : [];
+    d.shakes = d.shakes && typeof d.shakes === 'object' ? d.shakes : {};
+  }
+  o.machines = Array.isArray(o.machines) ? o.machines : DEF_MACHINES.slice();
+  o.plan = Array.isArray(o.plan) ? o.plan.filter(x => x && x.id && Array.isArray(x.days)) : [];
+  o.weights = Array.isArray(o.weights) ? o.weights.filter(w => w && /^\d{4}-\d\d-\d\d$/.test(w.d) && +w.kg > 0).sort((a, b) => a.d.localeCompare(b.d)) : [];
+  if (o.timer && !(+o.timer.start > 0)) o.timer = null;
+  if (o.onboarded === undefined) o.onboarded = !!o.profile.name;
+  return o;
+}
+db = migrate(db);
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} };
 
 /* ================= Utilidades ================= */
@@ -32,6 +54,7 @@ function day(k = cur) {
   return db.days[k];
 }
 const peek = (k) => db.days[k];
+const touched = (d) => !!d && !!(d.water || d.steps || d.prot.length || d.gym || d.ex.length || Object.keys(d.shakes).length);
 
 /* ================= Cálculos ================= */
 const PROT_FACTOR = { definir: 2.2, mantener: 1.6, volumen: 2.0 };
@@ -76,10 +99,14 @@ function toast(msg) {
   clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200);
 }
 const vibrate = (ms = 12) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+const reduceMotionNum = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 function animateNum(el, to, dec = 0) {
   const from = parseFloat(el.dataset.v || 0), t0 = performance.now(), dur = 700;
   el.dataset.v = to;
+  const id = (el._anim = (el._anim || 0) + 1);
+  if (from === to || reduceMotionNum) { el.textContent = fmt(to, dec); return; }
   const step = (t) => {
+    if (el._anim !== id) return;
     const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
     el.textContent = fmt(from + (to - from) * e, dec);
     if (p < 1) requestAnimationFrame(step);
@@ -145,6 +172,7 @@ function celebrate(k, key, msg) {
   confetti(); vibrate([30, 40, 30]); if (msg) toast(msg);
 }
 function checkGoals() {
+  if (cur !== todayKey()) return; // no celebrar al revisar días pasados
   const r = ratios(cur), d = peek(cur); if (!d) return;
   if (r.w >= 1) celebrate(cur, 'w', '¡Meta de agua cumplida! 💧');
   if (r.p >= 1) celebrate(cur, 'p', '¡Meta de proteína cumplida! 🎯');
@@ -175,7 +203,7 @@ $('dayNav').onclick = () => {
     <label class="field"><span>Fecha</span><input class="input" type="date" id="pickDate" value="${cur}" max="${todayKey()}"></label>
     <div class="btnrow"><button class="btn ghost" id="pdToday">Hoy</button><button class="btn primary" id="pdOk">Abrir</button></div>`, (b) => {
     b.querySelector('#pdToday').onclick = () => { cur = todayKey(); closeSheet(); render(); };
-    b.querySelector('#pdOk').onclick = () => { const v = b.querySelector('#pickDate').value; if (v) cur = v; closeSheet(); render(); };
+    b.querySelector('#pdOk').onclick = () => { const v = b.querySelector('#pickDate').value; if (/^\d{4}-\d\d-\d\d$/.test(v)) cur = v > todayKey() ? todayKey() : v; closeSheet(); render(); };
   });
 };
 
@@ -231,7 +259,7 @@ $('gymToggle').onclick = () => {
 function addWater(ml) {
   const d = day(); d.water = Math.max(0, d.water + ml); save(); vibrate();
   const g = goals();
-  if (!(ml > 0 && d.water / 1000 >= g.water)) toast(ml > 0 ? `+${ml} ml de agua` : `${ml} ml`);
+  if (!(ml > 0 && d.water / 1000 >= g.water && cur === todayKey() && !d.cel?.w)) toast(ml > 0 ? `+${ml} ml de agua` : `${ml} ml`);
   if (ml > 0) dropFx();
   render();
 }
@@ -288,6 +316,7 @@ function onMotion(e) {
     const d = day(todayKey()); d.steps++;
     if (d.steps % 10 === 0) save();
     if (view === 'pasos' && cur === todayKey()) { $('pSteps').textContent = fmt(d.steps); $('pSteps').dataset.v = d.steps; }
+    if (d.steps % 10 === 0 && (view === 'hoy' || view === 'pasos') && cur === todayKey()) render();
   } else rising = false;
   prevMag = m;
 }
@@ -325,7 +354,7 @@ function renderGym() {
 }
 function exSheet(pre = {}) {
   openSheet(`<h3>Añadir ejercicio</h3>
-    <label class="field"><span>Máquina</span><select class="input" id="exM">${machineOptions(pre.m)}<option value="__new">+ Otra máquina…</option></select></label>
+    <label class="field"><span>Máquina</span><select class="input" id="exM">${pre.m && !db.machines.includes(pre.m) ? `<option selected>${esc(pre.m)}</option>` : ''}${machineOptions(pre.m)}<option value="__new">+ Otra máquina…</option></select></label>
     <label class="field" id="exNewW" style="display:none"><span>Nombre de la máquina</span><input class="input" id="exNew"></label>
     <div class="grid2 tight">
       <label class="field"><span>Tiempo (min)</span><input class="input" type="number" inputmode="numeric" id="exMin" value="${pre.min || ''}"></label>
@@ -342,7 +371,7 @@ function exSheet(pre = {}) {
       if (m === '__new') { m = b.querySelector('#exNew').value.trim(); if (!m) return toast('Escribe el nombre'); if (!db.machines.includes(m)) db.machines.push(m); }
       const min = Math.max(0, Math.round(+b.querySelector('#exMin').value || 0));
       const d = day();
-      d.ex.push({ id: uid(), m, min, at: b.querySelector('#exAt').value, sets: +b.querySelector('#exSets').value || 0, reps: +b.querySelector('#exReps').value || 0, kg: +b.querySelector('#exKg').value || 0 });
+      d.ex.push({ id: uid(), m, min, at: b.querySelector('#exAt').value, sets: Math.max(0, Math.round(+b.querySelector('#exSets').value || 0)), reps: Math.max(0, Math.round(+b.querySelector('#exReps').value || 0)), kg: Math.max(0, parseFloat(String(b.querySelector('#exKg').value).replace(',', '.')) || 0) });
       d.ex.sort((a, c) => (a.at || '').localeCompare(c.at || ''));
       if (!d.gym) { d.gym = true; toast('Ejercicio guardado · día de gym marcado'); } else toast('Ejercicio guardado');
       save(); closeSheet(); render(); vibrate(15);
@@ -371,7 +400,7 @@ function drawTimer() {
 }
 function runTick() { clearInterval(tick); if (db.timer) tick = setInterval(drawTimer, 1000); drawTimer(); }
 $('timerBtn').onclick = () => {
-  if (!db.timer) { db.timer = { start: Date.now(), m: $('timerMachine').value, at: nowHM() }; save(); runTick(); vibrate(20); return; }
+  if (!db.timer) { if (!$('timerMachine').value) return toast('Añade una máquina primero'); db.timer = { start: Date.now(), m: $('timerMachine').value, at: nowHM() }; save(); runTick(); vibrate(20); return; }
   const t = db.timer; db.timer = null; save(); runTick();
   const min = Math.max(1, Math.round((Date.now() - t.start) / 60000));
   cur = todayKey(); exSheet({ m: t.m, min, at: t.at });
@@ -412,7 +441,7 @@ $('addProt').onclick = () => {
     <label class="field"><span>Hora</span><input class="input" type="time" id="pAt" value="${nowHM()}"></label></div>
     <div class="btnrow"><button class="btn primary" id="pOk">Guardar</button></div>`, (b) => {
     b.querySelector('#pOk').onclick = () => {
-      const g = +b.querySelector('#pG').value; if (!g) return toast('Escribe los gramos');
+      const g = Math.round(parseFloat(String(b.querySelector('#pG').value).replace(',', '.')) * 10) / 10; if (!(g > 0 && g <= 300)) return toast('Escribe gramos entre 1 y 300');
       day().prot.push({ id: uid(), n: b.querySelector('#pN').value.trim() || 'Comida', g, at: b.querySelector('#pAt').value });
       save(); closeSheet(); render(); toast(`+${g} g de proteína`);
     };
@@ -424,13 +453,13 @@ function shakeSheet(s) {
     <label class="field"><span>Nombre</span><input class="input" id="sN" value="${esc(e.name)}" placeholder="Ej. Whey post-entreno"></label>
     <div class="grid2 tight"><label class="field"><span>Proteína (g)</span><input class="input" type="number" inputmode="decimal" id="sG" value="${e.g}"></label>
     <label class="field"><span>Hora</span><input class="input" type="time" id="sT" value="${e.time}"></label></div>
-    <label class="field"><span>Días</span><div class="days7" id="sD">${DAYS.map((x, i) => `<button data-d="${i}" class="${e.days.includes(i) ? 'on' : ''}">${x}</button>`).join('')}</div></label>
+    <div class="field"><span>Días</span><div class="days7" id="sD">${DAYS.map((x, i) => `<button data-d="${i}" class="${e.days.includes(i) ? 'on' : ''}">${x}</button>`).join('')}</div></div>
     <div class="btnrow">${s ? '<button class="btn danger" id="sDel">Eliminar</button>' : ''}<button class="btn primary" id="sOk">Guardar</button></div>`, (b) => {
     b.querySelectorAll('[data-d]').forEach(x => x.onclick = () => x.classList.toggle('on'));
     b.querySelector('#sOk').onclick = () => {
       const name = b.querySelector('#sN').value.trim(); if (!name) return toast('Ponle un nombre');
       const days = [...b.querySelectorAll('[data-d].on')].map(x => +x.dataset.d); if (!days.length) return toast('Elige al menos un día');
-      const obj = { id: e.id || uid(), name, g: +b.querySelector('#sG').value || 0, time: b.querySelector('#sT').value || '08:00', days };
+      const obj = { id: e.id || uid(), name, g: Math.max(0, Math.min(300, +b.querySelector('#sG').value || 0)), time: b.querySelector('#sT').value || '08:00', days };
       if (s) Object.assign(s, obj); else db.plan.push(obj);
       save(); closeSheet(); render(); toast('Plan guardado');
     };
@@ -447,7 +476,7 @@ function shakeItem(s) {
 function bindShakeChecks(root) {
   root.querySelectorAll('[data-shake]').forEach(b => b.onclick = (ev) => {
     ev.stopPropagation();
-    const s = db.plan.find(x => x.id === b.dataset.shake), d = day();
+    const s = db.plan.find(x => x.id === b.dataset.shake), d = day(); if (!s) return render();
     if (d.shakes[s.id]) { delete d.shakes[s.id]; d.prot = d.prot.filter(p => p.shake !== s.id); }
     else { d.shakes[s.id] = nowHM(); d.prot.push({ id: uid(), n: 'Batido: ' + s.name, g: s.g, at: nowHM(), shake: s.id }); toast(`Batido tomado · +${s.g} g`); vibrate(20); }
     save(); render();
@@ -461,9 +490,6 @@ setInterval(() => {
 }, 20000);
 
 /* ================= COACH: peso, análisis, sugerencias ================= */
-if (!db.weights) db.weights = [];
-if (!db.profile.age) db.profile.age = 25;
-if (!db.profile.sex) db.profile.sex = 'h';
 const RATE = { definir: [-1.0, -0.5], mantener: [-0.25, 0.25], volumen: [0.25, 0.5] }; // % del peso por semana
 const GOAL_TXT = { definir: 'bajar grasa', mantener: 'mantener', volumen: 'ganar músculo' };
 function logWeight(kg, k = todayKey()) {
@@ -489,8 +515,8 @@ function recent(n = 7) {
   for (let i = 0; i < n; i++) {
     const dt = fromKey(todayKey()); dt.setDate(dt.getDate() - i);
     const k = keyOf(dt), d = peek(k); if (!d) continue;
-    const g = goals(k), touched = d.water || d.steps || d.prot.length || d.gym || d.ex.length;
-    if (!touched) continue;
+    const g = goals(k);
+    if (!touched(d)) continue;
     out.days++; out.water += d.water / 1000; out.prot += protOf(d); out.steps += d.steps;
     if (d.water / 1000 >= g.water) out.waterOk++; if (protOf(d) >= g.prot) out.protOk++;
     if (d.gym) out.gym++; out.min += minOf(d);
@@ -589,11 +615,12 @@ function renderCoach() {
   $('sugList').innerHTML = suggestions().map(s => `<div class="sug ${s.t}"><div><b>${esc(s.h)}</b><span>${esc(s.b)}</span></div></div>`).join('');
   aiStatus();
 }
+$('wIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('wSave').click(); });
 $('wSave').onclick = () => {
   const v = parseFloat(String($('wIn').value).replace(',', '.'));
   if (!(v >= 30 && v <= 300)) return toast('Escribe un peso válido');
   const prev = db.weights[db.weights.length - 1];
-  logWeight(v); $('wIn').value = ''; vibrate(20);
+  logWeight(Math.round(v * 10) / 10); $('wIn').value = ''; vibrate(20);
   toast(prev ? `Peso guardado (${v - prev.kg >= 0 ? '+' : ''}${fmt(v - prev.kg, 1)} kg)` : 'Peso guardado');
   render();
 };
@@ -617,7 +644,7 @@ function dataSummary() {
   const days = [];
   for (let i = 0; i < 30; i++) {
     const dt = fromKey(todayKey()); dt.setDate(dt.getDate() - i);
-    const k = keyOf(dt), d = peek(k); if (!d) continue;
+    const k = keyOf(dt), d = peek(k); if (!touched(d)) continue;
     days.push({ fecha: k, gym: d.gym, agua_L: +(d.water / 1000).toFixed(2), meta_agua_L: goals(k).water, proteina_g: protOf(d), meta_proteina_g: goals(k).prot, pasos: d.steps,
       ejercicios: d.ex.map(x => ({ maquina: x.m, min: x.min, series: x.sets, reps: x.reps, kg: x.kg, hora: x.at })),
       batidos: Object.entries(d.shakes || {}).map(([id, h]) => ({ nombre: db.plan.find(s => s.id === id)?.name, hora: h })) });
@@ -669,6 +696,7 @@ async function askAI(text, withData) {
   } finally { $('aiAnalyze').disabled = $('aiAsk').disabled = false; }
 }
 $('aiAnalyze').onclick = () => { aiMsgs = []; $('aiOut').innerHTML = ''; askAI('Analiza mi progreso y dime las 3–5 cosas más importantes que debo cambiar esta semana.', true); };
+$('aiQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('aiAsk').click(); });
 $('aiAsk').onclick = () => { const q = $('aiQ').value.trim(); if (!q) return; $('aiQ').value = ''; askAI(q, aiMsgs.length === 0); };
 
 /* ================= CALENDARIO ================= */
@@ -690,7 +718,7 @@ function renderCal() {
   $('calGrid').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { calSel = b.dataset.k; vibrate(8); renderCal(); });
   $('monthStats').innerHTML = `<div><b>${gymN}</b><span>días de gym</span></div><div><b>${fmt(mins / 60, 1)} h</b><span>entrenando</span></div><div><b>${wOk}</b><span>días con agua ok</span></div><div><b>${pOk}</b><span>días con proteína ok</span></div><div><b>${fmt(steps)}</b><span>pasos totales</span></div><div><b>${fmt(kmOf(steps), 1)}</b><span>km recorridos</span></div>`;
 
-  const d = peek(calSel), dt = fromKey(calSel);
+  const d = touched(peek(calSel)) ? peek(calSel) : null, dt = fromKey(calSel);
   const title = dt.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' });
   $('calDay').innerHTML = `<div class="row-h"><div class="label big">${title}</div>${calSel <= tk ? '<button class="btn sm primary" id="calOpen">Editar</button>' : ''}</div>` + (d ? `
     <div class="calc">
@@ -702,6 +730,7 @@ function renderCal() {
       ${Object.keys(d.shakes || {}).length ? `<div><span>Batidos</span><b>${Object.entries(d.shakes).map(([id, t]) => esc(db.plan.find(s => s.id === id)?.name || 'Batido') + ' ' + t).join(', ')}</b></div>` : ''}
     </div>` : empty('calendar', 'Sin registros este día.'));
   const o = $('calOpen'); if (o) o.onclick = () => { cur = calSel; go('hoy'); };
+  $('calNext').disabled = calM.getFullYear() * 12 + calM.getMonth() >= new Date().getFullYear() * 12 + new Date().getMonth();
 }
 $('calPrev').onclick = () => { calM.setMonth(calM.getMonth() - 1); renderCal(); };
 $('calNext').onclick = () => { calM.setMonth(calM.getMonth() + 1); renderCal(); };
@@ -726,7 +755,7 @@ function renderPerfil() {
 }
 const bindNum = (id, f, min, max) => $(id).addEventListener('change', () => { const v = +$(id).value; if (v >= min && v <= max) { db.profile[f] = v; save(); render(); } else { toast('Valor no válido'); renderPerfil(); } });
 $('pfName').addEventListener('input', () => { db.profile.name = $('pfName').value.trim(); save(); renderTop(); });
-$('pfWeight').addEventListener('change', () => { const v = +$('pfWeight').value; if (v >= 30 && v <= 300) { logWeight(v); render(); } else { toast('Valor no válido'); renderPerfil(); } });
+$('pfWeight').addEventListener('change', () => { const v = parseFloat(String($('pfWeight').value).replace(',', '.')); if (v >= 30 && v <= 300) { logWeight(Math.round(v * 10) / 10); render(); } else { toast('Valor no válido'); renderPerfil(); } });
 bindNum('pfAge', 'age', 12, 100);
 document.querySelectorAll('#pfSex button').forEach(b => b.onclick = () => { db.profile.sex = b.dataset.v; save(); render(); }); bindNum('pfHeight', 'height', 120, 230);
 bindNum('pfSteps', 'stepGoal', 1000, 50000); bindNum('pfDays', 'gymDays', 1, 7);
@@ -739,7 +768,7 @@ $('exportBtn').onclick = async () => {
 $('importBtn').onclick = () => {
   openSheet(`<h3>Restaurar respaldo</h3><div class="sub">Pega el texto que copiaste. Reemplaza los datos actuales.</div><textarea class="input" id="imp" style="height:180px;margin-top:10px"></textarea><div class="btnrow"><button class="btn primary" id="impOk">Restaurar</button></div>`, (b) => {
     b.querySelector('#impOk').onclick = () => {
-      try { const o = JSON.parse(b.querySelector('#imp').value); if (!o.days || !o.profile) throw 0; db = o; save(); closeSheet(); render(); toast('Datos restaurados'); }
+      try { const o = JSON.parse(b.querySelector('#imp').value); if (!o.days || !o.profile) throw 0; db = migrate(o); cur = todayKey(); save(); closeSheet(); render(); runTick(); toast('Datos restaurados'); }
       catch (e) { toast('El texto no es un respaldo válido'); }
     };
   });
@@ -761,9 +790,10 @@ document.addEventListener('backbutton', (e) => {
   else navigator.app && navigator.app.exitApp();
 }, false);
 let lastToday = todayKey();
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (cur === lastToday && lastToday !== todayKey()) cur = todayKey(); lastToday = todayKey(); render(); } });
+setInterval(() => { if (lastToday !== todayKey()) { if (cur === lastToday) cur = todayKey(); lastToday = todayKey(); render(); } }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(); if (!document.hidden) { if (cur === lastToday && lastToday !== todayKey()) cur = todayKey(); lastToday = todayKey(); render(); } });
 day(); save();
 render(); runTick();
-if (!db.profile.name) setTimeout(() => go('perfil'), 300);
+if (!db.onboarded) { db.onboarded = true; save(); setTimeout(() => { go('perfil'); toast('Completa tu perfil para calcular tus metas'); }, 300); }
 else { const lw = db.weights[db.weights.length - 1]; if (!lw || daysAgo(lw.d) >= 7) setTimeout(() => toast('Hace días que no te pesas · ve a Coach'), 1200); }
 })();

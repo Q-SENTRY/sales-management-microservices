@@ -322,3 +322,4 @@ button:disabled{opacity:.5}
 .toast{white-space:normal;text-align:center;max-width:calc(100vw - 32px);width:max-content}
 .bar.zero{opacity:0}
 html,body{overflow-x:hidden}
+.cd:disabled,button:disabled.icon-btn{opacity:.3}
